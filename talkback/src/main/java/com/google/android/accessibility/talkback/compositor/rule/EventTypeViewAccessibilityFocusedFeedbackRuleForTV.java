@@ -105,26 +105,29 @@ public final class EventTypeViewAccessibilityFocusedFeedbackRuleForTV {
       }
     }
 
-    CharSequence collectionItemTransition =
-        speakCollectionInfo ? globalVariables.getCollectionItemTransitionDescription(node) : "";
-    if (!TextUtils.isEmpty(collectionItemTransition)) {
-      outputJoinList.add(collectionItemTransition);
-      logString.append(
-          String.format("\n    collectionItemTransition={%s}", collectionItemTransition));
-    } else if (speakRoles
-        && !WebInterfaceUtils.isWebContainer(node)
-        && AccessibilityNodeInfoUtils.isHeading(node)) {
-      // If the source node has collection item transition, collectionItemTransition text would
-      // not be empty. And TalkBack should announce the collection item transition information or it
-      // should fallback to announce the role/heading description.
-      CharSequence nodeRoleDescription =
-          AccessibilityNodeFeedbackUtils.getNodeRoleDescription(node, context, globalVariables);
-      if (!TextUtils.isEmpty(nodeRoleDescription)) {
-        outputJoinList.add(nodeRoleDescription);
-        logString.append(String.format("\n    nodeRoleDescription={%s}", nodeRoleDescription));
-      } else {
-        outputJoinList.add(context.getString(R.string.heading_template));
-        logString.append("\n    heading");
+    boolean isTableItem = globalVariables.isFocusedNodeInTable(node);
+    if (!isTableItem) {
+      CharSequence collectionItemTransition =
+          speakCollectionInfo ? globalVariables.getCollectionItemTransitionDescription(node) : "";
+      if (!TextUtils.isEmpty(collectionItemTransition)) {
+        outputJoinList.add(collectionItemTransition);
+        logString.append(
+            String.format("\n    collectionItemTransition={%s}", collectionItemTransition));
+      } else if (speakRoles
+          && !WebInterfaceUtils.isWebContainer(node)
+          && AccessibilityNodeInfoUtils.isHeading(node)) {
+        // If the source node has collection item transition, collectionItemTransition text would
+        // not be empty. And TalkBack should announce the collection item transition information or it
+        // should fallback to announce the role/heading description.
+        CharSequence nodeRoleDescription =
+            AccessibilityNodeFeedbackUtils.getNodeRoleDescription(node, context, globalVariables);
+        if (!TextUtils.isEmpty(nodeRoleDescription)) {
+          outputJoinList.add(nodeRoleDescription);
+          logString.append(String.format("\n    nodeRoleDescription={%s}", nodeRoleDescription));
+        } else {
+          outputJoinList.add(context.getString(R.string.heading_template));
+          logString.append("\n    heading");
+        }
       }
     }
 
@@ -135,10 +138,11 @@ public final class EventTypeViewAccessibilityFocusedFeedbackRuleForTV {
     CharSequence eventDescription =
         AccessibilityEventFeedbackUtils.getEventContentDescriptionOrEventAggregateText(
             event, preferredLocale);
+    CharSequence contentDescription;
     if (!TextUtils.isEmpty(nodeUnlabelledState)) {
       CharSequence unlabelledDescription =
           TextUtils.isEmpty(eventDescription) ? nodeUnlabelledState : eventDescription;
-      outputJoinList.add(unlabelledDescription);
+      contentDescription = unlabelledDescription;
       logString
           .append(String.format("\n    unlabelledDescription={%s}", unlabelledDescription))
           .append(String.format(", eventDescription={%s}", eventDescription));
@@ -146,11 +150,24 @@ public final class EventTypeViewAccessibilityFocusedFeedbackRuleForTV {
       CharSequence nodeTreeDescription =
           treeNodesDescription.aggregateNodeTreeDescription(node, event);
       if (!TextUtils.isEmpty(nodeTreeDescription)) {
-        outputJoinList.add(nodeTreeDescription);
+        contentDescription = nodeTreeDescription;
         logString.append(String.format("\n    nodeTreeDescription={%s}", nodeTreeDescription));
       } else {
-        outputJoinList.add(eventDescription);
+        contentDescription = eventDescription;
         logString.append(String.format("\n    eventDescription={%s}", eventDescription));
+      }
+    }
+
+    if (isTableItem) {
+      CharSequence tableCellFeedback =
+          globalVariables.getTableItemCellFeedback(node, contentDescription);
+      if (!TextUtils.isEmpty(tableCellFeedback)) {
+        outputJoinList.add(tableCellFeedback);
+        logString.append(String.format("\n    tableCellFeedback={%s}", tableCellFeedback));
+      }
+    } else {
+      if (!TextUtils.isEmpty(contentDescription)) {
+        outputJoinList.add(contentDescription);
       }
     }
 

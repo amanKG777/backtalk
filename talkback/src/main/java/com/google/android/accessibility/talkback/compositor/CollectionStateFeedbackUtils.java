@@ -27,8 +27,10 @@ import static com.google.android.accessibility.utils.monitor.CollectionStateUtil
 import android.content.Context;
 import android.text.TextUtils;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.CollectionItemInfoCompat;
 import com.google.android.accessibility.talkback.R;
 import com.google.android.accessibility.utils.AccessibilityNodeInfoUtils;
+import com.google.android.accessibility.utils.Filter;
 import com.google.android.accessibility.utils.Role;
 import com.google.android.accessibility.utils.monitor.CollectionState;
 import com.google.android.libraries.accessibility.utils.log.LogUtils;
@@ -285,6 +287,288 @@ public final class CollectionStateFeedbackUtils {
     }
 
     return getCollectionTableItemColumnName(collectionState, tableItemColumnIndex, context);
+  }
+
+  /**
+   * Formats feedback for a table item cell based on user verbosity preferences.
+   *
+   * @param focusedNode The focused node in the table cell
+   * @param cellContent The primary text content of the cell
+   * @param collectionState The current collection state
+   * @param context Application context
+   * @param columnHeadersMode One of TABLE_HEADERS_BEFORE, TABLE_HEADERS_AFTER, or TABLE_HEADERS_OFF
+   * @param speakTableRowColumnNumbers Whether row and column coordinates are spoken
+   * @param speakRoles Whether role descriptions are spoken
+   * @return The formatted feedback text with pauses where appropriate
+   */
+  public static @Nullable AccessibilityNodeInfoCompat findCellAt(
+      @Nullable AccessibilityNodeInfoCompat tableRoot, int targetRow, int targetCol) {
+    if (tableRoot == null || targetRow < 0 || targetCol < 0) {
+      return null;
+    }
+    return AccessibilityNodeInfoUtils.getMatchingDescendant(
+        tableRoot,
+        Filter.node(
+            (node) -> {
+              if (node == null) {
+                return false;
+              }
+              CollectionItemInfoCompat itemInfo = node.getCollectionItemInfo();
+              return itemInfo != null
+                  && itemInfo.getRowIndex() == targetRow
+                  && itemInfo.getColumnIndex() == targetCol;
+            }));
+  }
+
+  /**
+   * Formats feedback for a table item cell based on user verbosity preferences.
+   *
+   * @param focusedNode The focused node in the table cell
+   * @param cellNode The table cell node (or null)
+   * @param tableRoot The table root node (or null)
+   * @param cellContent The primary text content of the cell
+   * @param collectionState The current collection state
+   * @param context Application context
+   * @param columnHeadersMode One of TABLE_HEADERS_BEFORE, TABLE_HEADERS_AFTER, or TABLE_HEADERS_OFF
+   * @param speakTableRowColumnNumbers Whether row and column coordinates are spoken
+   * @param speakRoles Whether role descriptions are spoken
+   * @param isRowTransition Whether this focus move crossed a row boundary
+   * @return The formatted feedback text with pauses where appropriate
+   */
+  public static CharSequence getTableItemCellFeedback(
+      @Nullable AccessibilityNodeInfoCompat focusedNode,
+      @Nullable AccessibilityNodeInfoCompat cellNode,
+      @Nullable AccessibilityNodeInfoCompat tableRoot,
+      CharSequence cellContent,
+      CollectionState collectionState,
+      Context context,
+      String columnHeadersMode,
+      boolean speakTableRowColumnNumbers,
+      boolean speakRoles,
+      boolean isRowTransition) {
+    CollectionState.TableItemState itemState =
+        (collectionState != null) ? collectionState.getTableItemState() : null;
+
+    if (cellNode == null && itemState == null) {
+      return cellContent;
+    }
+
+    int rowIndex = (itemState != null) ? itemState.getRowIndex() : -1;
+    int colIndex = (itemState != null) ? itemState.getColumnIndex() : -1;
+    if (cellNode != null && cellNode.getCollectionItemInfo() != null) {
+      if (rowIndex < 0) {
+        rowIndex = cellNode.getCollectionItemInfo().getRowIndex();
+      }
+      if (colIndex < 0) {
+        colIndex = cellNode.getCollectionItemInfo().getColumnIndex();
+      }
+    }
+
+    int headingType =
+        (collectionState != null)
+            ? getCollectionTableItemHeadingType(collectionState)
+            : CollectionState.TYPE_NONE;
+    boolean isHeading =
+        (headingType == CollectionState.TYPE_COLUMN)
+            || (rowIndex == 0
+                && (headingType != CollectionState.TYPE_ROW)
+                && ((focusedNode != null && AccessibilityNodeInfoUtils.isHeading(focusedNode))
+                    || (cellNode != null
+                        && cellNode.getCollectionItemInfo() != null
+                        && cellNode.getCollectionItemInfo().isHeading())
+                    || (cellNode != null && AccessibilityNodeInfoUtils.isHeading(cellNode))
+                    || (tableRoot != null
+                        && tableRoot.getCollectionInfo() != null
+                        && (tableRoot.getCollectionInfo().getRowCount() > 1
+                            || tableRoot.getCollectionInfo().getRowCount() == -1))));
+
+    // If this cell is a column heading itself (e.g. <th> in row 0):
+    if (isHeading) {
+      List<CharSequence> joinList = new ArrayList<>();
+      if (speakTableRowColumnNumbers) {
+        if (isRowTransition && rowIndex >= 0) {
+          joinList.add(context.getString(R.string.row_index_template, rowIndex + 1));
+        }
+        if (colIndex >= 0) {
+          joinList.add(context.getString(R.string.column_index_template, colIndex + 1));
+        }
+      }
+      CharSequence text =
+          !TextUtils.isEmpty(cellContent)
+              ? cellContent
+              : ((cellNode != null) ? AccessibilityNodeInfoUtils.getNodeText(cellNode) : "");
+      if (!TextUtils.isEmpty(text)) {
+        joinList.add(text);
+      }
+      if (speakRoles
+          && (collectionState == null
+              || TextUtils.isEmpty(getCollectionTableItemRoleDescription(collectionState)))) {
+        joinList.add(context.getString(R.string.column_heading_template));
+      }
+      return CompositorUtils.joinCharSequences(joinList, CompositorUtils.getSeparator(), true);
+    }
+
+    // Otherwise, this is a table data cell (or row header cell).
+    CharSequence colHeader = null;
+    if (!GlobalVariables.TABLE_HEADERS_OFF.equals(columnHeadersMode)) {
+      if (itemState != null) {
+        colHeader = itemState.getColumnName();
+      }
+      if (TextUtils.isEmpty(colHeader)
+          && collectionState != null
+          && colIndex >= 0
+          && collectionState.getColumnHeaders() != null) {
+        colHeader = collectionState.getColumnHeaders().get(colIndex);
+      }
+      if (TextUtils.isEmpty(colHeader) && cellNode != null) {
+        colHeader = AccessibilityNodeInfoUtils.getGridColumnTitle(cellNode);
+      }
+      if (TextUtils.isEmpty(colHeader) && tableRoot != null && colIndex >= 0) {
+        AccessibilityNodeInfoCompat headerNode = findCellAt(tableRoot, 0, colIndex);
+        if (headerNode != null) {
+          colHeader = CollectionState.getHeaderText(headerNode);
+          if (TextUtils.isEmpty(colHeader)) {
+            colHeader = AccessibilityNodeInfoUtils.getNodeText(headerNode);
+          }
+          if (!TextUtils.isEmpty(colHeader)
+              && collectionState != null
+              && collectionState.getColumnHeaders() != null) {
+            collectionState.getColumnHeaders().put(colIndex, colHeader);
+          }
+        }
+      }
+    }
+
+    CharSequence colCoord =
+        (speakTableRowColumnNumbers && colIndex >= 0)
+            ? context.getString(R.string.column_index_template, colIndex + 1)
+            : null;
+    CharSequence rowCoord =
+        (speakTableRowColumnNumbers && rowIndex >= 0 && isRowTransition)
+            ? context.getString(R.string.row_index_template, rowIndex + 1)
+            : null;
+    CharSequence rowHeader =
+        (isRowTransition
+                && headingType != CollectionState.TYPE_ROW
+                && itemState != null)
+            ? itemState.getRowName()
+            : null;
+
+    CharSequence cellText = (cellContent == null) ? "" : cellContent.toString().trim();
+    if (TextUtils.isEmpty(cellText) && cellNode != null) {
+      CharSequence nodeText = AccessibilityNodeInfoUtils.getNodeText(cellNode);
+      if (nodeText != null) {
+        cellText = nodeText.toString().trim();
+      }
+    }
+
+    if (GlobalVariables.TABLE_HEADERS_BEFORE.equals(columnHeadersMode)) {
+      // Header before cell data
+      List<CharSequence> prefixList = new ArrayList<>();
+      if (rowCoord != null) {
+        prefixList.add(rowCoord);
+      }
+      if (rowHeader != null && rowCoord == null) {
+        prefixList.add(rowHeader);
+      }
+      if (!TextUtils.isEmpty(colHeader)) {
+        prefixList.add(colHeader);
+      }
+      if (colCoord != null) {
+        prefixList.add(colCoord);
+      }
+
+      CharSequence prefix =
+          CompositorUtils.joinCharSequences(prefixList, CompositorUtils.getSeparator(), true);
+      if (TextUtils.isEmpty(prefix)) {
+        return cellText;
+      }
+      if (TextUtils.isEmpty(cellText)) {
+        return prefix;
+      }
+      return ensureTerminalPunctuation(prefix) + " " + cellText;
+    } else if (GlobalVariables.TABLE_HEADERS_OFF.equals(columnHeadersMode)) {
+      List<CharSequence> mainList = new ArrayList<>();
+      if (rowCoord != null) {
+        mainList.add(rowCoord);
+      }
+      if (rowHeader != null && rowCoord == null) {
+        mainList.add(rowHeader);
+      }
+      if (colCoord != null) {
+        mainList.add(colCoord);
+      }
+      if (!TextUtils.isEmpty(cellText)) {
+        mainList.add(cellText);
+      }
+      return CompositorUtils.joinCharSequences(mainList, CompositorUtils.getSeparator(), true);
+    } else {
+      // Header after cell data (default: TABLE_HEADERS_AFTER)
+      List<CharSequence> mainList = new ArrayList<>();
+      if (rowCoord != null) {
+        mainList.add(rowCoord);
+      }
+      if (rowHeader != null && rowCoord == null) {
+        mainList.add(rowHeader);
+      }
+      if (colCoord != null) {
+        mainList.add(colCoord);
+      }
+      if (!TextUtils.isEmpty(cellText)) {
+        mainList.add(cellText);
+      }
+
+      CharSequence mainPart =
+          CompositorUtils.joinCharSequences(mainList, CompositorUtils.getSeparator(), true);
+      if (TextUtils.isEmpty(colHeader)) {
+        return mainPart;
+      }
+      if (TextUtils.isEmpty(mainPart)) {
+        return colHeader;
+      }
+
+      // Add pause between cell data and column header via terminal punctuation
+      return ensureTerminalPunctuation(mainPart) + " " + colHeader;
+    }
+  }
+
+  public static CharSequence getTableItemCellFeedback(
+      @Nullable AccessibilityNodeInfoCompat focusedNode,
+      CharSequence cellContent,
+      CollectionState collectionState,
+      Context context,
+      String columnHeadersMode,
+      boolean speakTableRowColumnNumbers,
+      boolean speakRoles) {
+    AccessibilityNodeInfoCompat cellNode =
+        (focusedNode != null) ? AccessibilityNodeInfoUtils.getTableCellUnderTable(focusedNode) : null;
+    AccessibilityNodeInfoCompat tableRoot =
+        (cellNode != null) ? AccessibilityNodeInfoUtils.getTableRoot(cellNode)
+            : ((focusedNode != null) ? AccessibilityNodeInfoUtils.getTableRoot(focusedNode) : null);
+    boolean isRowTransition =
+        (collectionState != null) && getCollectionIsRowTransition(collectionState);
+    return getTableItemCellFeedback(
+        focusedNode,
+        cellNode,
+        tableRoot,
+        cellContent,
+        collectionState,
+        context,
+        columnHeadersMode,
+        speakTableRowColumnNumbers,
+        speakRoles,
+        isRowTransition);
+  }
+
+  private static String ensureTerminalPunctuation(CharSequence text) {
+    if (TextUtils.isEmpty(text)) {
+      return "";
+    }
+    String trimmed = text.toString().trim();
+    if (trimmed.endsWith(".") || trimmed.endsWith("!") || trimmed.endsWith("?") || trimmed.endsWith(";")) {
+      return trimmed;
+    }
+    return trimmed + ".";
   }
 
   private static CharSequence getCollectionListItemPositionDescription(

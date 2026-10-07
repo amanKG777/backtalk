@@ -51,6 +51,7 @@ import com.google.android.accessibility.utils.AccessibilityNodeInfoUtils;
 import com.google.android.accessibility.utils.FormFactorUtils;
 import com.google.android.accessibility.utils.KeyboardUtils;
 import com.google.android.accessibility.utils.Logger;
+import com.google.android.accessibility.utils.Role;
 import com.google.android.accessibility.utils.TimedFlags;
 import com.google.android.accessibility.utils.input.WindowsDelegate;
 import com.google.android.accessibility.utils.monitor.CollectionState;
@@ -178,6 +179,13 @@ public class GlobalVariables extends TimedFlags implements ParseTree.VariableDel
   // Verbosity settings
   private boolean speakRoles = true;
   private boolean speakCollectionInfo = true;
+
+  public static final String TABLE_HEADERS_BEFORE = "before";
+  public static final String TABLE_HEADERS_AFTER = "after";
+  public static final String TABLE_HEADERS_OFF = "off";
+
+  private String tableColumnHeaders = TABLE_HEADERS_AFTER;
+  private boolean speakTableRowColumnNumbers = true;
 
   // Control sounds: whether they are heard, and the ones heard or felt for focused controls.
   private boolean controlSoundsOn = false;
@@ -610,6 +618,22 @@ public class GlobalVariables extends TimedFlags implements ParseTree.VariableDel
     speakCollectionInfo = value;
   }
 
+  public String getTableColumnHeaders() {
+    return tableColumnHeaders;
+  }
+
+  public void setTableColumnHeaders(String value) {
+    tableColumnHeaders = value;
+  }
+
+  public boolean getSpeakTableRowColumnNumbers() {
+    return speakTableRowColumnNumbers;
+  }
+
+  public void setSpeakTableRowColumnNumbers(boolean value) {
+    speakTableRowColumnNumbers = value;
+  }
+
   public boolean getSpeakRoles() {
     return speakRoles;
   }
@@ -902,6 +926,65 @@ public class GlobalVariables extends TimedFlags implements ParseTree.VariableDel
       @Nullable AccessibilityNodeInfoCompat focusedNode) {
     return CollectionStateFeedbackUtils.getCollectionItemTransitionDescription(
         focusedNode, collectionState, mContext);
+  }
+
+  public CollectionState getCollectionState() {
+    return collectionState;
+  }
+
+  private int lastTableItemRowIndex = -1;
+  private int lastTableItemColIndex = -1;
+  private @Nullable AccessibilityNodeInfoCompat lastTableRoot = null;
+
+  public boolean isFocusedNodeInTable(@Nullable AccessibilityNodeInfoCompat node) {
+    if (collectionState.getCollectionRole() == Role.ROLE_GRID
+        && collectionState.getTableItemState() != null) {
+      return true;
+    }
+    return node != null && AccessibilityNodeInfoUtils.getTableCellUnderTable(node) != null;
+  }
+
+  public boolean isFocusedNodeInTable() {
+    return isFocusedNodeInTable(null);
+  }
+
+  public CharSequence getTableItemCellFeedback(
+      @Nullable AccessibilityNodeInfoCompat focusedNode, CharSequence cellContent) {
+    AccessibilityNodeInfoCompat cellNode =
+        (focusedNode != null) ? AccessibilityNodeInfoUtils.getTableCellUnderTable(focusedNode) : null;
+    AccessibilityNodeInfoCompat tableRoot =
+        (cellNode != null) ? AccessibilityNodeInfoUtils.getTableRoot(cellNode)
+            : ((focusedNode != null) ? AccessibilityNodeInfoUtils.getTableRoot(focusedNode) : null);
+
+    int curRow = -1;
+    int curCol = -1;
+    if (cellNode != null && cellNode.getCollectionItemInfo() != null) {
+      curRow = cellNode.getCollectionItemInfo().getRowIndex();
+      curCol = cellNode.getCollectionItemInfo().getColumnIndex();
+    } else if (collectionState.getTableItemState() != null) {
+      curRow = collectionState.getTableItemState().getRowIndex();
+      curCol = collectionState.getTableItemState().getColumnIndex();
+    }
+
+    boolean isRowTransition = (collectionState.getRowColumnTransition() & CollectionState.TYPE_ROW) != 0;
+    if (!isRowTransition && curRow >= 0) {
+      isRowTransition = (lastTableRoot == null || !lastTableRoot.equals(tableRoot) || curRow != lastTableItemRowIndex);
+    }
+    lastTableItemRowIndex = curRow;
+    lastTableItemColIndex = curCol;
+    lastTableRoot = tableRoot;
+
+    return CollectionStateFeedbackUtils.getTableItemCellFeedback(
+        focusedNode,
+        cellNode,
+        tableRoot,
+        cellContent,
+        collectionState,
+        mContext,
+        tableColumnHeaders,
+        speakTableRowColumnNumbers,
+        speakRoles,
+        isRowTransition);
   }
 
   /** Returns if the reading menu has actions settings. */
