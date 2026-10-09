@@ -287,13 +287,13 @@ public final class EventTypeViewAccessibilityFocusedFeedbackRule {
     CharSequence collectionItemTransition =
         speakCollectionInfo ? globalVariables.getCollectionItemTransitionDescription(node) : "";
 
-    boolean isTableGrid = (globalVariables.getCollectionRole() == Role.ROLE_GRID);
-    boolean headersBefore =
-        isTableGrid
-            && GlobalVariables.TABLE_HEADERS_BEFORE.equals(
-                globalVariables.getTableColumnHeaders());
+    // In a table, the row and column can be spoken before the cell's contents.
+    boolean transitionBeforeContent =
+        !TextUtils.isEmpty(collectionItemTransition)
+            && globalVariables.getCollectionRole() == Role.ROLE_GRID
+            && GlobalVariables.TABLE_HEADERS_BEFORE.equals(globalVariables.getTableColumnHeaders());
 
-    if (headersBefore && !TextUtils.isEmpty(collectionItemTransition)) {
+    if (transitionBeforeContent) {
       outputJoinList.add(collectionItemTransition);
       logString.append(
           String.format("\n    collectionItemTransition={%s}", collectionItemTransition));
@@ -310,7 +310,7 @@ public final class EventTypeViewAccessibilityFocusedFeedbackRule {
     logString.append(String.format("\n    phoneticExample={%s}", phoneticExample));
 
     // Prepare Collection item transition state or Node role/heading description for feedback.
-    if (!headersBefore) {
+    if (!transitionBeforeContent) {
       if (!TextUtils.isEmpty(collectionItemTransition)) {
         outputJoinList.add(collectionItemTransition);
         logString.append(

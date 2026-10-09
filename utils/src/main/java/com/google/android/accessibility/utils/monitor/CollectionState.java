@@ -616,29 +616,6 @@ public class CollectionState {
     @TableHeadingType int heading = getTableHeadingType(collectionItemNode, item, collection);
     int rowIndex = getRowIndex(item, collection);
     int columnIndex = getColumnIndex(item, collection);
-
-    if (columnHeaders.size() == 0 && rowHeaders.size() == 0) {
-      updateTableHeaderInfo(collectionRoot, rowHeaders, columnHeaders);
-    }
-    if ((heading & TYPE_ROW) != 0 && rowIndex != -1 && rowHeaders.get(rowIndex) == null) {
-      CharSequence headingName = getHeaderText(collectionItemNode);
-      if (TextUtils.isEmpty(headingName)) {
-        headingName = AccessibilityNodeInfoUtils.getGridRowTitle(collectionItemNode);
-      }
-      if (!TextUtils.isEmpty(headingName)) {
-        rowHeaders.put(rowIndex, headingName);
-      }
-    }
-    if ((heading & TYPE_COLUMN) != 0 && columnIndex != -1 && columnHeaders.get(columnIndex) == null) {
-      CharSequence headingName = getHeaderText(collectionItemNode);
-      if (TextUtils.isEmpty(headingName)) {
-        headingName = AccessibilityNodeInfoUtils.getGridColumnTitle(collectionItemNode);
-      }
-      if (!TextUtils.isEmpty(headingName)) {
-        columnHeaders.put(columnIndex, headingName);
-      }
-    }
-
     CharSequence rowName = rowIndex != -1 ? rowHeaders.get(rowIndex) : null;
     CharSequence columnName = columnIndex != -1 ? columnHeaders.get(columnIndex) : null;
     CharSequence roleDescription = collectionItemNode.getRoleDescription();
@@ -873,29 +850,25 @@ public class CollectionState {
       return;
     }
 
+    // Limit search to children and grandchildren of the root node for performance reasons.
+    // We want to search grandchildren because web pages put table headers <th> inside table
+    // rows <tr> so they are nested two levels down.
     CollectionInfoCompat collectionInfo = collectionRoot.getCollectionInfo();
-    searchTableHeaders(collectionRoot, collectionInfo, rowHeaders, columnHeaders, /* depth= */ 0);
-  }
-
-  private static void searchTableHeaders(
-      AccessibilityNodeInfoCompat node,
-      CollectionInfoCompat collectionInfo,
-      SparseArray<CharSequence> rowHeaders,
-      SparseArray<CharSequence> columnHeaders,
-      int depth) {
-    if (node == null || depth > 4) {
-      return;
-    }
-    int numChildren = node.getChildCount();
+    int numChildren = collectionRoot.getChildCount();
     for (int i = 0; i < numChildren; ++i) {
-      AccessibilityNodeInfoCompat child = node.getChild(i);
+      AccessibilityNodeInfoCompat child = collectionRoot.getChild(i);
       if (child == null) {
         continue;
       }
-      boolean isCell = child.getCollectionItemInfo() != null;
-      boolean isHeader = updateSingleTableHeader(child, collectionInfo, rowHeaders, columnHeaders);
-      if (!isCell && !isHeader && depth < 4) {
-        searchTableHeaders(child, collectionInfo, rowHeaders, columnHeaders, depth + 1);
+      if (!updateSingleTableHeader(child, collectionInfo, rowHeaders, columnHeaders)) {
+        int numGrandchildren = child.getChildCount();
+        for (int j = 0; j < numGrandchildren; ++j) {
+          AccessibilityNodeInfoCompat grandchild = child.getChild(j);
+          if (grandchild == null) {
+            continue;
+          }
+          updateSingleTableHeader(grandchild, collectionInfo, rowHeaders, columnHeaders);
+        }
       }
     }
   }
@@ -910,14 +883,8 @@ public class CollectionState {
     }
 
     CharSequence headingName = getHeaderText(node);
-    if (TextUtils.isEmpty(headingName)) {
-      headingName = AccessibilityNodeInfoUtils.getGridColumnTitle(node);
-    }
-    if (TextUtils.isEmpty(headingName)) {
-      headingName = AccessibilityNodeInfoUtils.getGridRowTitle(node);
-    }
     CollectionItemInfoCompat itemInfo = node.getCollectionItemInfo();
-    if (itemInfo != null && !TextUtils.isEmpty(headingName)) {
+    if (itemInfo != null && headingName != null) {
       @TableHeadingType int headingType = getTableHeadingType(node, itemInfo, collectionInfo);
       if ((headingType & TYPE_ROW) != 0) {
         rowHeaders.put(itemInfo.getRowIndex(), headingName);
@@ -982,7 +949,7 @@ public class CollectionState {
       @NonNull AccessibilityNodeInfoCompat node,
       @NonNull CollectionItemInfoCompat item,
       @NonNull CollectionInfoCompat collection) {
-    if (AccessibilityNodeInfoUtils.isHeading(node) || item.isHeading()) {
+    if (AccessibilityNodeInfoUtils.isHeading(node)) {
       if (item.getRowSpan() == 1 && item.getColumnSpan() == 1) {
         if (getRowIndex(item, collection) == 0 && collection.getColumnCount() > 1) {
           return TYPE_COLUMN;

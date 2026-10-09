@@ -51,7 +51,6 @@ import com.google.android.accessibility.utils.AccessibilityNodeInfoUtils;
 import com.google.android.accessibility.utils.FormFactorUtils;
 import com.google.android.accessibility.utils.KeyboardUtils;
 import com.google.android.accessibility.utils.Logger;
-import com.google.android.accessibility.utils.Role;
 import com.google.android.accessibility.utils.TimedFlags;
 import com.google.android.accessibility.utils.input.WindowsDelegate;
 import com.google.android.accessibility.utils.monitor.CollectionState;
