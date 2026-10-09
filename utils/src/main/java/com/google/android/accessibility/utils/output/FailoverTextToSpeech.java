@@ -240,8 +240,15 @@ public class FailoverTextToSpeech {
   /** Plays speech through {@link LowLatencyAudio}, which reaches the speaker sooner. */
   public static final String PREF_LOW_LATENCY_AUDIO_KEY = "pref_low_latency_audio";
 
-  public static final boolean LOW_LATENCY_AUDIO_DEFAULT = false;
-  private volatile boolean lowLatencyAudio = LOW_LATENCY_AUDIO_DEFAULT;
+  private volatile boolean lowLatencyAudio = false;
+
+  /**
+   * Returns whether low-latency audio is on when the user hasn't chosen. It's off on watches,
+   * whose settings don't have the switch.
+   */
+  public static boolean lowLatencyAudioDefault(Context context) {
+    return !context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WATCH);
+  }
 
   /** Engines that gave no audio when synthesizing to a file, which speak the usual way. */
   private final Set<String> enginesWithoutFileAudio = ConcurrentHashMap.newKeySet();
@@ -350,7 +357,9 @@ public class FailoverTextToSpeech {
           speakInPhrases = sharedPrefs.getBoolean(key, SPEAK_IN_PHRASES_DEFAULT);
         } else if (PREF_LOW_LATENCY_AUDIO_KEY.equals(key)) {
           boolean wasOn = lowLatencyAudio;
-          lowLatencyAudio = sharedPrefs.getBoolean(key, LOW_LATENCY_AUDIO_DEFAULT);
+          lowLatencyAudio =
+              sharedPrefs.getBoolean(
+                  key, lowLatencyAudioDefault(FailoverTextToSpeech.this.context));
           if (wasOn && !lowLatencyAudio) {
             turnOffLowLatencyAudio();
           }
@@ -443,7 +452,7 @@ public class FailoverTextToSpeech {
     SharedPreferences prefs = SharedPreferencesUtils.getSharedPreferences(context);
     preferredTtsEngine = readPreferredEngine(prefs);
     speakInPhrases = prefs.getBoolean(PREF_SPEAK_IN_PHRASES_KEY, SPEAK_IN_PHRASES_DEFAULT);
-    lowLatencyAudio = prefs.getBoolean(PREF_LOW_LATENCY_AUDIO_KEY, LOW_LATENCY_AUDIO_DEFAULT);
+    lowLatencyAudio = prefs.getBoolean(PREF_LOW_LATENCY_AUDIO_KEY, lowLatencyAudioDefault(context));
     readLanguageSwitches(prefs);
     prefs.registerOnSharedPreferenceChangeListener(preferenceChangeListener);
 
@@ -1366,6 +1375,17 @@ public class FailoverTextToSpeech {
   private static String parentUtteranceId(String utteranceId) {
     int separator = utteranceId.indexOf(CHUNK_ID_SEPARATOR);
     return separator < 0 ? utteranceId : utteranceId.substring(0, separator);
+  }
+
+  /**
+   * Speaks the usual way from now on, rather than through {@link LowLatencyAudio}, until the
+   * setting is read again.
+   */
+  public void speakWithoutLowLatencyAudio() {
+    if (lowLatencyAudio) {
+      lowLatencyAudio = false;
+      turnOffLowLatencyAudio();
+    }
   }
 
   /** Stops the speech playing through {@link LowLatencyAudio}. */
@@ -2599,7 +2619,7 @@ public class FailoverTextToSpeech {
       if (speechCacheManager != null && speechCacheManager.handleOnStop(utteranceId, interrupted)) {
         return;
       }
-      handleUtteranceCompleted(utteranceId, /* success= */ !interrupted);
+      reportUtteranceCompleted(utteranceId, /* success= */ !interrupted);
     }
 
     @Override
@@ -2616,7 +2636,7 @@ public class FailoverTextToSpeech {
       if (speechCacheManager != null && speechCacheManager.handleOnError(utteranceId)) {
         return;
       }
-      handleUtteranceCompleted(utteranceId, /* success= */ false);
+      reportUtteranceCompleted(utteranceId, /* success= */ false);
     }
 
     @Override
@@ -2634,7 +2654,19 @@ public class FailoverTextToSpeech {
       if (speechCacheManager != null && speechCacheManager.handleOnDone(utteranceId)) {
         return;
       }
-      handleUtteranceCompleted(utteranceId, /* success= */ true);
+      reportUtteranceCompleted(utteranceId, /* success= */ true);
+    }
+
+    /**
+     * Hands the end of an utterance over to the handler thread, as its start is, since the speech
+     * controller starts the next utterance from it and is not safe to use from two threads.
+     */
+    private void reportUtteranceCompleted(String utteranceId, boolean success) {
+      if (shouldHandleTtsCallbackInHandlerThread) {
+        mHandler.onUtteranceCompleted(utteranceId, success);
+      } else {
+        handleUtteranceCompleted(utteranceId, success);
+      }
     }
   }
 
