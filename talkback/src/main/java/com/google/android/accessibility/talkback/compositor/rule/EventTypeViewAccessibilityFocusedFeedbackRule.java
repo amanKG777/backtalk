@@ -280,19 +280,26 @@ public final class EventTypeViewAccessibilityFocusedFeedbackRule {
 
     boolean speakCollectionInfo = globalVariables.getSpeakCollectionInfo();
     boolean speakRoles = globalVariables.getSpeakRoles();
-    boolean isTableItem = globalVariables.isFocusedNodeInTable(node);
+    logString
+        .append(String.format("\n Verbosity speakCollectionInfo=%s", speakCollectionInfo))
+        .append(String.format(", speakRoles=%s", speakRoles));
+    CharSequence collectionItemTransition =
+        speakCollectionInfo ? globalVariables.getCollectionItemTransitionDescription(node) : "";
 
-    if (isTableItem) {
-      CharSequence tableCellFeedback =
-          globalVariables.getTableItemCellFeedback(node, contentDescription);
-      if (!TextUtils.isEmpty(tableCellFeedback)) {
-        outputJoinList.add(tableCellFeedback);
-        logString.append(String.format("\n    tableCellFeedback={%s}", tableCellFeedback));
-      }
-    } else {
-      if (!TextUtils.isEmpty(contentDescription)) {
-        outputJoinList.add(contentDescription);
-      }
+    boolean isTableGrid = (globalVariables.getCollectionRole() == Role.ROLE_GRID);
+    boolean headersBefore =
+        isTableGrid
+            && GlobalVariables.TABLE_HEADERS_BEFORE.equals(
+                globalVariables.getTableColumnHeaders());
+
+    if (headersBefore && !TextUtils.isEmpty(collectionItemTransition)) {
+      outputJoinList.add(collectionItemTransition);
+      logString.append(
+          String.format("\n    collectionItemTransition={%s}", collectionItemTransition));
+    }
+
+    if (!TextUtils.isEmpty(contentDescription)) {
+      outputJoinList.add(contentDescription);
     }
 
     // Add phonetic spelling if necessary.
@@ -302,12 +309,7 @@ public final class EventTypeViewAccessibilityFocusedFeedbackRule {
     logString.append(String.format("\n    phoneticExample={%s}", phoneticExample));
 
     // Prepare Collection item transition state or Node role/heading description for feedback.
-    if (!isTableItem) {
-      logString
-          .append(String.format("\n Verbosity speakCollectionInfo=%s", speakCollectionInfo))
-          .append(String.format(", speakRoles=%s", speakRoles));
-      CharSequence collectionItemTransition =
-          speakCollectionInfo ? globalVariables.getCollectionItemTransitionDescription(node) : "";
+    if (!headersBefore) {
       if (!TextUtils.isEmpty(collectionItemTransition)) {
         outputJoinList.add(collectionItemTransition);
         logString.append(

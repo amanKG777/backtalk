@@ -925,66 +925,11 @@ public class GlobalVariables extends TimedFlags implements ParseTree.VariableDel
   public CharSequence getCollectionItemTransitionDescription(
       @Nullable AccessibilityNodeInfoCompat focusedNode) {
     return CollectionStateFeedbackUtils.getCollectionItemTransitionDescription(
-        focusedNode, collectionState, mContext);
+        focusedNode, collectionState, mContext, tableColumnHeaders, speakTableRowColumnNumbers);
   }
 
-  public CollectionState getCollectionState() {
-    return collectionState;
-  }
-
-  private int lastTableItemRowIndex = -1;
-  private int lastTableItemColIndex = -1;
-  private @Nullable AccessibilityNodeInfoCompat lastTableRoot = null;
-
-  public boolean isFocusedNodeInTable(@Nullable AccessibilityNodeInfoCompat node) {
-    if (collectionState.getCollectionRole() == Role.ROLE_GRID
-        && collectionState.getTableItemState() != null) {
-      return true;
-    }
-    return node != null && AccessibilityNodeInfoUtils.getTableCellUnderTable(node) != null;
-  }
-
-  public boolean isFocusedNodeInTable() {
-    return isFocusedNodeInTable(null);
-  }
-
-  public CharSequence getTableItemCellFeedback(
-      @Nullable AccessibilityNodeInfoCompat focusedNode, CharSequence cellContent) {
-    AccessibilityNodeInfoCompat cellNode =
-        (focusedNode != null) ? AccessibilityNodeInfoUtils.getTableCellUnderTable(focusedNode) : null;
-    AccessibilityNodeInfoCompat tableRoot =
-        (cellNode != null) ? AccessibilityNodeInfoUtils.getTableRoot(cellNode)
-            : ((focusedNode != null) ? AccessibilityNodeInfoUtils.getTableRoot(focusedNode) : null);
-
-    int curRow = -1;
-    int curCol = -1;
-    if (cellNode != null && cellNode.getCollectionItemInfo() != null) {
-      curRow = cellNode.getCollectionItemInfo().getRowIndex();
-      curCol = cellNode.getCollectionItemInfo().getColumnIndex();
-    } else if (collectionState.getTableItemState() != null) {
-      curRow = collectionState.getTableItemState().getRowIndex();
-      curCol = collectionState.getTableItemState().getColumnIndex();
-    }
-
-    boolean isRowTransition = (collectionState.getRowColumnTransition() & CollectionState.TYPE_ROW) != 0;
-    if (!isRowTransition && curRow >= 0) {
-      isRowTransition = (lastTableRoot == null || !lastTableRoot.equals(tableRoot) || curRow != lastTableItemRowIndex);
-    }
-    lastTableItemRowIndex = curRow;
-    lastTableItemColIndex = curCol;
-    lastTableRoot = tableRoot;
-
-    return CollectionStateFeedbackUtils.getTableItemCellFeedback(
-        focusedNode,
-        cellNode,
-        tableRoot,
-        cellContent,
-        collectionState,
-        mContext,
-        tableColumnHeaders,
-        speakTableRowColumnNumbers,
-        speakRoles,
-        isRowTransition);
+  public int getCollectionRole() {
+    return collectionState.getCollectionRole();
   }
 
   /** Returns if the reading menu has actions settings. */

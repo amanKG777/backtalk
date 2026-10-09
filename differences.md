@@ -144,6 +144,16 @@ TalkBack echoed a word such as "don't" as two words. Backtalk echoes it as one w
 
 When you turn Backtalk off, it says "Backtalk off" at the accessibility volume, using your device's real volume levels. TalkBack only approximated that volume.
 
+### Table column headers
+
+In **Verbosity**, you can choose whether Backtalk reads table column headers before or after the cell's data, or leaves them out:
+
+*   **After cell data**, the default, keeps TalkBack's order: the cell's contents, then the row and column headers or numbers.
+*   **Before cell data** speaks the row and column headers or numbers before the cell's contents.
+*   **Do not read** leaves column headers out, and reads column numbers only when row and column numbers are on.
+
+Under preset settings in **Verbosity**, you can also turn off **Speak row and column numbers** to hear only named headers without row and column coordinates. The setting is on by default.
+
 ## Notifications
 
 ### Speak notifications setting

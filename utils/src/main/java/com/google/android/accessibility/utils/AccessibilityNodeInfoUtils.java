@@ -2985,22 +2985,11 @@ public class AccessibilityNodeInfoUtils {
   }
 
   /** Returns whether the given node is a table root. */
-  public static boolean isTableRoot(@Nullable AccessibilityNodeInfoCompat node) {
-    if (node == null) {
-      return false;
-    }
-    if (Role.getRole(node) == Role.ROLE_GRID) {
-      return true;
-    }
+  private static boolean isTableRoot(AccessibilityNodeInfoCompat node) {
     CollectionInfoCompat collectionInfo = node.getCollectionInfo();
-    if (collectionInfo == null) {
-      return false;
-    }
-    int rowCount = collectionInfo.getRowCount();
-    int colCount = collectionInfo.getColumnCount();
-    return (rowCount > 1 && colCount > 1)
-        || (colCount > 1 && rowCount == -1)
-        || (rowCount > 1 && colCount == -1);
+    return collectionInfo != null
+        && collectionInfo.getRowCount() > 1
+        && collectionInfo.getColumnCount() > 1;
   }
 
   /** Returns a table cell under table containing the given node. */
@@ -3022,7 +3011,7 @@ public class AccessibilityNodeInfoUtils {
   }
 
   /** Returns whether the given node is a table cell. */
-  public static boolean isTableCell(AccessibilityNodeInfoCompat node) {
+  private static boolean isTableCell(AccessibilityNodeInfoCompat node) {
     CollectionItemInfoCompat collectionItemInfo = node.getCollectionItemInfo();
     return collectionItemInfo != null
         && collectionItemInfo.getRowIndex() >= 0
@@ -3030,10 +3019,7 @@ public class AccessibilityNodeInfoUtils {
   }
 
   /** Returns whether the given node is a table cell in a table. */
-  public static boolean isTableCellUnderTable(@Nullable AccessibilityNodeInfoCompat node) {
-    if (node == null) {
-      return false;
-    }
+  private static boolean isTableCellUnderTable(AccessibilityNodeInfoCompat node) {
     CollectionItemInfoCompat collectionItemInfo = node.getCollectionItemInfo();
     return collectionItemInfo != null
         && collectionItemInfo.getRowIndex() >= 0
