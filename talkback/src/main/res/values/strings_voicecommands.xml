@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" standalone="no"?>
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <!--
       Source: Possible user requests from voice commands to read from top.
@@ -182,6 +182,10 @@
   <string name="voice_commands_write">Write</string>
   <!-- Voice-shortcut command word to input text to editable ui. [CHAR_LIMIT=20] -->
   <string name="voice_commands_Spell">Spell</string>
+  <!-- Voice-shortcut command to launch Backtalk Settings. [CHAR_LIMIT=30] -->
+  <string name="voice_commands_backtalk_settings">Backtalk settings</string>
+  <string name="voice_commands_backtalk_setting">Backtalk setting</string>
+  <string name="voice_commands_open_backtalk_settings">Open Backtalk settings</string>
   <!-- Voice-shortcut command to launch TalkBack Settings. [CHAR_LIMIT=30] -->
   <string name="voice_commands_talkback_settings">TalkBack settings</string>
   <!-- Voice-shortcut command to launch TalkBack Settings. [CHAR_LIMIT=30] -->
@@ -371,4 +375,48 @@
   <string name="voice_commands_help_label_description">Add or edit a custom label to say \"submit\"</string>
   <!-- The description of voice command "Stop". [CHAR_LIMIT=NONE] -->
   <string name="voice_commands_help_stop_description">Stop current voice command</string>
+  <!-- Feedback strings for system voice commands -->
+  <string name="voice_commands_opening_app">Opening %1$s</string>
+  <string name="voice_commands_app_not_found">Could not find app %1$s</string>
+  <string name="voice_commands_dnd_on">Do Not Disturb turned on</string>
+  <string name="voice_commands_dnd_off">Do Not Disturb turned off</string>
+  <string name="voice_commands_dnd_permission_required">Please grant Do Not Disturb access to use this voice command</string>
+  <string name="voice_commands_opening_hotspot_settings">Opening hotspot settings</string>
+  <string name="voice_commands_opening_mobile_data_settings">Opening mobile data settings</string>
+  <string name="voice_commands_opening_wifi_settings">Opening Wi-Fi settings</string>
+  <string name="voice_commands_opening_bluetooth_settings">Opening Bluetooth settings</string>
+  <string name="voice_commands_wifi_on">Wi-Fi turned on</string>
+  <string name="voice_commands_wifi_off">Wi-Fi turned off</string>
+  <string name="voice_commands_wifi_already_on">Wi-Fi is already on</string>
+  <string name="voice_commands_wifi_already_off">Wi-Fi is already off</string>
+  <string name="voice_commands_turning_on_wifi">Turning on Wi-Fi</string>
+  <string name="voice_commands_turning_off_wifi">Turning off Wi-Fi</string>
+  <string name="voice_commands_mobile_data_on">Mobile data turned on</string>
+  <string name="voice_commands_mobile_data_off">Mobile data turned off</string>
+  <string name="voice_commands_mobile_data_already_on">Mobile data is already on</string>
+  <string name="voice_commands_mobile_data_already_off">Mobile data is already off</string>
+  <string name="voice_commands_turning_on_mobile_data">Turning on mobile data</string>
+  <string name="voice_commands_turning_off_mobile_data">Turning off mobile data</string>
+  <string name="voice_commands_hotspot_on">Hotspot turned on</string>
+  <string name="voice_commands_hotspot_off">Hotspot turned off</string>
+  <string name="voice_commands_hotspot_already_on">Hotspot is already on</string>
+  <string name="voice_commands_hotspot_already_off">Hotspot is already off</string>
+  <string name="voice_commands_turning_on_hotspot">Turning on hotspot</string>
+  <string name="voice_commands_turning_off_hotspot">Turning off hotspot</string>
+  <string name="voice_commands_bluetooth_on">Bluetooth turned on</string>
+  <string name="voice_commands_bluetooth_off">Bluetooth turned off</string>
+  <string name="voice_commands_bluetooth_already_on">Bluetooth is already on</string>
+  <string name="voice_commands_bluetooth_already_off">Bluetooth is already off</string>
+  <string name="voice_commands_turning_on_bluetooth">Turning on Bluetooth</string>
+  <string name="voice_commands_turning_off_bluetooth">Turning off Bluetooth</string>
+  <string name="voice_commands_opening_settings">Opening Settings</string>
+  <string name="voice_commands_opening_backtalk_settings">Opening Backtalk settings</string>
+  <string name="voice_commands_volume_set">Volume %1$d percent</string>
+  <string name="voice_commands_muted">Muted</string>
+  <string name="voice_commands_unmuted">Unmuted</string>
+  <string name="voice_commands_clicked">Clicked %1$s</string>
+  <string name="voice_commands_found">Found %1$s</string>
+  <string name="voice_commands_element_not_found">Could not find %1$s on screen</string>
+  <string name="voice_commands_cannot_click">Found %1$s but could not click it</string>
+  <string name="script_binding_voice">Voice: "%1$s"</string>
 </resources>

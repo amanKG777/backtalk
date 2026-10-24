@@ -366,6 +366,40 @@ If you open the menu with a gesture that ends with your fingers still on the scr
 
 To turn the circle menu on, go to **Backtalk menu** and turn on **Circle menu**. It's off by default.
 
+## Voice commands
+
+### Fuzzy phrase matching and natural phrasing
+
+Voice commands accept natural phrasing variations and are tolerant of minor speech-recognition inaccuracies. Conversational prefixes such as "please", "can you", and "hey Backtalk" are automatically stripped, and common speech recognition quirks (such as "turn of dnd" for "turn off dnd" or "d and d" for "dnd") are handled transparently.
+
+### Open apps
+
+Say "open [app name]", "launch [app name]", or "start [app name]" (for example, "open YouTube" or "open WhatsApp") to find and launch any installed app. If multiple or abbreviated names are used (such as "yt" or "calc"), Backtalk matches the most relevant app and opens it.
+
+### System controls and quick settings
+
+Backtalk adds voice commands for common phone settings:
+*   **Do Not Disturb**: Say "turn on Do Not Disturb" or "turn on DND" to silence notifications, and "turn off DND" to restore them. If notification policy access has not been granted yet, Backtalk asks for permission and opens the setting.
+*   **Hotspot**: Say "turn on hotspot" or "turn off hotspot" to directly toggle your portable Wi-Fi hotspot.
+*   **Mobile data**: Say "turn on mobile data" or "turn off mobile data" to directly toggle mobile data.
+*   **Wi-Fi and Bluetooth**: Say "turn on Wi-Fi" or "turn off Wi-Fi", "turn on Bluetooth" or "turn off Bluetooth" to directly toggle Wi-Fi or Bluetooth.
+*   **System settings**: Say "open settings" or "settings" to open the Android system Settings app.
+*   **Backtalk settings**: Say "open Backtalk settings" or "Backtalk settings" to open screen reader preferences directly.
+*   **Device status and battery**: Say "battery" to hear the battery level and charging state, or "status" to hear the time, network, and device status.
+*   **Volume**: Say "volume up", "volume down", "mute", or "unmute".
+
+### Screen element actions and search
+
+Backtalk allows you to interact dynamically with options and controls on your screen:
+*   **Click or activate elements**: Say "click [name]", "tap [name]", "press [name]", "activate [name]", or "select [name]" (for example, "click play button", "tap next", "press submit", "activate pause", "click more options"). Backtalk scans visible elements on screen, resolves common UI suffixes (like button, tab, switch, checkbox, icon), identifies clickable containers, performs the click, and announces confirmation.
+*   **Find and focus elements**: Say "find [name]", "focus [name]", "search for [name]", or "locate [name]" (for example, "find play button", "focus search", "locate cancel") to search the screen and move accessibility focus directly to the matching element.
+
+### Voice command scripts API
+
+Backtalk scripts can create custom voice commands:
+*   **Manifest commands**: Add `voice: 'phrase'` or `voice: ['phrase 1', 'phrase 2']` to any entry in `manifest.commands`. When spoken, Backtalk runs the command with `via: 'voice'`, `event.command`, and `event.remainder`.
+*   **Dynamic voice API**: Use `backtalk.onVoiceCommand(pattern, callback)` to register exact phrases, fuzzy phrases, or wildcard capture patterns (such as `'search for *'`).
+
 ## Screen and brightness
 
 ### Brightness reading control

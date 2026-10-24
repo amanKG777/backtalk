@@ -2269,6 +2269,8 @@ public class TalkBackService extends AccessibilityServiceCompat
 
     voiceCommandProcessor =
         new VoiceCommandProcessor(this, accessibilityFocusMonitor, selectorController, analytics);
+    voiceCommandProcessor.setBatteryMonitor(batteryMonitor);
+    voiceCommandProcessor.setStatusReader(statusReader);
     voiceCommandActor =
         new VoiceCommandActor(
             this,

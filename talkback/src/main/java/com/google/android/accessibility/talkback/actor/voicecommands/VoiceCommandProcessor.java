@@ -92,6 +92,8 @@ import android.content.Intent;
 import android.text.TextUtils;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import com.google.android.accessibility.talkback.preference.TalkBackPreferencesActivity;
+import com.google.android.accessibility.talkback.monitor.BatteryMonitor;
+import com.google.android.accessibility.talkback.status.StatusReader;
 import com.google.android.accessibility.talkback.ActorState;
 import com.google.android.accessibility.talkback.Feedback;
 import com.google.android.accessibility.talkback.Interpretation;
@@ -100,6 +102,7 @@ import com.google.android.accessibility.talkback.R;
 import com.google.android.accessibility.talkback.TalkBackService;
 import com.google.android.accessibility.talkback.actor.DimScreenActor;
 import com.google.android.accessibility.talkback.actor.gemini.GeminiConfiguration;
+import com.google.android.accessibility.talkback.scripting.Scripts;
 import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics;
 import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.VoiceCommandTypeId;
 import com.google.android.accessibility.talkback.contextmenu.ContextMenuItem;
@@ -140,6 +143,7 @@ public class VoiceCommandProcessor {
   private SelectorController selectorController;
   private ActorState actorState;
   private final TalkBackAnalytics analytics;
+  private final SystemVoiceCommands systemVoiceCommands;
 
   private boolean echoNotRecognizedTextEnabled;
 
@@ -156,7 +160,11 @@ public class VoiceCommandProcessor {
   };
 
   private static final int[] talkbackSettingCommandResArray = {
-    R.string.voice_commands_talkback_settings, R.string.voice_commands_talkback_setting
+    R.string.voice_commands_backtalk_settings,
+    R.string.voice_commands_backtalk_setting,
+    R.string.voice_commands_open_backtalk_settings,
+    R.string.voice_commands_talkback_settings,
+    R.string.voice_commands_talkback_setting
   };
 
   private static final int[] finishSelectCommandResArray = {
@@ -258,10 +266,24 @@ public class VoiceCommandProcessor {
     this.accessibilityFocusMonitor = accessibilityFocusMonitor;
     this.selectorController = selectorController;
     this.analytics = analytics;
+    this.systemVoiceCommands = new SystemVoiceCommands(service, null, null, null);
   }
 
   public void setPipeline(Pipeline.FeedbackReturner pipeline) {
     this.pipeline = pipeline;
+    this.systemVoiceCommands.setPipeline(pipeline);
+  }
+
+  public void setBatteryMonitor(BatteryMonitor batteryMonitor) {
+    this.systemVoiceCommands.setBatteryMonitor(batteryMonitor);
+  }
+
+  public void setStatusReader(StatusReader statusReader) {
+    this.systemVoiceCommands.setStatusReader(statusReader);
+  }
+
+  public SystemVoiceCommands getSystemVoiceCommands() {
+    return systemVoiceCommands;
   }
 
   public void setActorState(ActorState actorState) {
@@ -309,6 +331,18 @@ public class VoiceCommandProcessor {
     }
     LogUtils.i(LOG_TAG, "handleSpeechCommand() command=\"%s\"", command);
     EventId eventId = EVENT_ID_UNTRACKED;
+
+    // Check custom script voice commands
+    if (!isPartialResult && Scripts.onVoiceCommand(command)) {
+      analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
+      return true;
+    }
+
+    // Check system voice commands (open app, hotspot, mobile data, dnd, wifi, bluetooth, status, settings)
+    if (systemVoiceCommands.handleCommand(command, isPartialResult)) {
+      analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
+      return true;
+    }
 
     // Gemini voice command
     // command format: Gemini
@@ -869,21 +903,26 @@ public class VoiceCommandProcessor {
   }
 
   private boolean containsWord(String command, int stringResId) {
-    String[] commandSplit = command.split("\\s|\\p{Punct}");
-    if (equals((command), stringResId)) {
+    if (command == null) {
+      return false;
+    }
+    String target = service.getString(stringResId).toLowerCase();
+    if (equals(command, stringResId)) {
       return true;
     }
+    String[] commandSplit = command.split("\\s|\\p{Punct}");
     for (int i = 0; i < commandSplit.length; i++) {
       if (equals(commandSplit[i], stringResId)) {
         return true;
       }
     }
-    return false;
+    return VoiceCommandFuzzyMatcher.matchesPhrase(command, target, 0.82);
   }
 
   private @Nullable String equals(String command, List<String> stringList) {
     for (int i = 0; i < stringList.size(); i++) {
-      if (command.equals(stringList.get(i).toLowerCase())) {
+      String item = stringList.get(i).toLowerCase();
+      if (command.equals(item) || VoiceCommandFuzzyMatcher.matchesPhrase(command, item, 0.85)) {
         return command;
       }
     }
@@ -891,11 +930,27 @@ public class VoiceCommandProcessor {
   }
 
   private boolean equals(String command, int stringResId) {
-    return command.equals(service.getString(stringResId).toLowerCase());
+    if (command == null) {
+      return false;
+    }
+    String target = service.getString(stringResId).toLowerCase();
+    if (command.equals(target)) {
+      return true;
+    }
+    return VoiceCommandFuzzyMatcher.matchesPhrase(command, target, 0.82);
   }
 
   private boolean startsWith(String command, int stringResId) {
-    return command.startsWith(service.getString(stringResId).toLowerCase());
+    if (command == null) {
+      return false;
+    }
+    String target = service.getString(stringResId).toLowerCase();
+    if (command.startsWith(target)) {
+      return true;
+    }
+    String normCommand = VoiceCommandFuzzyMatcher.normalize(command);
+    String normTarget = VoiceCommandFuzzyMatcher.normalize(target);
+    return normCommand.startsWith(normTarget);
   }
 
   private int startsWith(String command, int[] stringResIdArray) {
@@ -903,7 +958,7 @@ public class VoiceCommandProcessor {
       return -1;
     }
     for (int i = 0; i < stringResIdArray.length; i++) {
-      if (command.startsWith(service.getString(stringResIdArray[i]).toLowerCase())) {
+      if (startsWith(command, stringResIdArray[i])) {
         return stringResIdArray[i];
       }
     }
@@ -915,7 +970,7 @@ public class VoiceCommandProcessor {
       return -1;
     }
     for (int i = 0; i < stringResIdArray.length; i++) {
-      if (command.equals(service.getString(stringResIdArray[i]).toLowerCase())) {
+      if (equals(command, stringResIdArray[i])) {
         return stringResIdArray[i];
       }
     }
@@ -925,6 +980,14 @@ public class VoiceCommandProcessor {
   /* Returns the tail of command-string after the stringResId prefix. */
   private CharSequence remainder(String command, int stringResId) {
     CharSequence prefix = service.getString(stringResId).toLowerCase();
+    String normCommand = VoiceCommandFuzzyMatcher.normalize(command);
+    String normTarget = VoiceCommandFuzzyMatcher.normalize(prefix.toString());
+    if (normCommand.startsWith(normTarget)) {
+      return normCommand.substring(normTarget.length()).trim();
+    }
+    if (command.startsWith(prefix.toString())) {
+      return command.substring(prefix.length()).trim();
+    }
     return command.substring(prefix.length());
   }
 
