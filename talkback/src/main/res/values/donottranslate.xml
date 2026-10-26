@@ -290,6 +290,7 @@
     <string name="pref_selector_granularity_search_key">pref_selector_granularity_search_key</string>
     <string name="pref_selector_special_widget_key" translatable="false">pref_selector_special_widget_key</string>
     <string name="pref_selector_granularity_typo_key" translatable="false">pref_selector_granularity_typo_key</string>
+    <string name="pref_selector_dictation_key" translatable="false">pref_selector_dictation_key</string>
     <string name="pref_selector_granularity_row_column_key" translatable="false">pref_selector_granularity_row_column_key</string>
     <string name="pref_selector_granularity_row_key" translatable="false">pref_selector_granularity_row_key</string>
     <string name="pref_selector_granularity_column_key" translatable="false">pref_selector_granularity_column_key</string>
@@ -1606,6 +1607,7 @@
     <bool name="pref_selector_granularity_search_default">true</bool>
     <bool name="pref_selector_special_widget_default">true</bool>
     <bool name="pref_selector_granularity_typo_default">true</bool>
+    <bool name="pref_selector_dictation_default">true</bool>
     <bool name="pref_selector_granularity_row_column_default">true</bool>
     <bool name="pref_selector_granularity_row_default">false</bool>
     <bool name="pref_selector_granularity_column_default">false</bool>
@@ -1929,6 +1931,7 @@
     <string name="selector_granularity_column">GRANULARITY_COLUMN</string>
     <string name="selector_special_widget" translatable="false">ADJUSTABLE_WIDGET</string>
     <string name="selector_granularity_typo" translatable="false">GRANULARITY_TYPO</string>
+    <string name="selector_dictation" translatable="false">DICTATION</string>
 
     <string name="pref_key_selector_changed_key" translatable="false">pref_key_selector_changed_key</string>
 

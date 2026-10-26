@@ -18,6 +18,12 @@
             android:summary="@string/summary_spell_check"/>
         <com.google.android.accessibility.material.preference.AccessibilitySuiteCheckBoxPreference
             android:layout="@layout/listitem_2texts"
+            android:defaultValue="@bool/pref_selector_dictation_default"
+            android:key="@string/pref_selector_dictation_key"
+            android:title="@string/title_pref_selector_dictation"
+            android:summary="@string/summary_dictation"/>
+        <com.google.android.accessibility.material.preference.AccessibilitySuiteCheckBoxPreference
+            android:layout="@layout/listitem_2texts"
             android:defaultValue="@bool/pref_selector_granularity_characters_default"
             android:key="@string/pref_selector_granularity_characters_key"
             android:title="@string/granularity_character"

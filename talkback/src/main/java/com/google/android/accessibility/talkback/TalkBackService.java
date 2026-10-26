@@ -143,6 +143,7 @@ import com.google.android.accessibility.talkback.actor.search.UniversalSearchAct
 import com.google.android.accessibility.talkback.actor.search.UniversalSearchManager;
 import com.google.android.accessibility.talkback.actor.voicecommands.VoiceCommandActor;
 import com.google.android.accessibility.talkback.actor.voicecommands.VoiceCommandProcessor;
+import com.google.android.accessibility.talkback.dictation.DictationController;
 import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.PeriodicDataProvider;
 import com.google.android.accessibility.talkback.audio.AudioDeviceRouter;
 import com.google.android.accessibility.talkback.braille.BrailleHelper;
@@ -725,6 +726,7 @@ public class TalkBackService extends AccessibilityServiceCompat
 
   /** Processor for voice commands */
   private VoiceCommandProcessor voiceCommandProcessor;
+  private DictationController dictationController;
 
   /** Shared preferences used within TalkBack. */
   private SharedPreferences prefs;
@@ -1008,6 +1010,10 @@ public class TalkBackService extends AccessibilityServiceCompat
 
     if (speechCacheController != null) {
       speechCacheController.destroy();
+    }
+
+    if (dictationController != null) {
+      dictationController.stopDictation(EVENT_ID_UNTRACKED, false);
     }
 
     super.onDestroy();
@@ -2437,6 +2443,12 @@ public class TalkBackService extends AccessibilityServiceCompat
     voiceCommandProcessor.setSelectorController(selectorController);
     globalVariables.setSelectorController(selectorController);
     universalSearchActor.setSelectorController(selectorController);
+
+    dictationController = new DictationController(this, accessibilityFocusMonitor);
+    dictationController.setPipeline(pipeline.getFeedbackReturner());
+    dictationController.setVoiceCommandActor(voiceCommandActor);
+    selectorController.setDictationController(dictationController);
+    voiceCommandProcessor.setDictationController(dictationController);
 
     compositor.setSpeaker(pipeline.getSpeaker());
 

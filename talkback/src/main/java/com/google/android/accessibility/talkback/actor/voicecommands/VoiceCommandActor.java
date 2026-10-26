@@ -109,6 +109,11 @@ public class VoiceCommandActor implements SpeechRecognizerRequester {
   @Override
   public void onError(int error) {
     LogUtils.d(TAG, "errorCallback with error: %d", error);
+    if (voiceCommandProcessor.getDictationController() != null
+        && voiceCommandProcessor.getDictationController().isDictationActive()) {
+      voiceCommandProcessor.getDictationController().onRecognitionError(error);
+      return;
+    }
     switch (error) {
       case ERROR_INSUFFICIENT_PERMISSIONS ->
           speakDelayed(talkbackContext, R.string.voice_commands_no_mic_permissions);

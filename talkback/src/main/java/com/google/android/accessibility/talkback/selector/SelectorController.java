@@ -50,6 +50,8 @@ import static com.google.android.accessibility.talkback.selector.SelectorControl
 import static com.google.android.accessibility.talkback.selector.SelectorController.Setting.GRANULARITY_CONTAINERS;
 import static com.google.android.accessibility.talkback.selector.SelectorController.Setting.GRANULARITY_SEARCH;
 import static com.google.android.accessibility.talkback.selector.SelectorController.Setting.GRANULARITY_TYPO;
+import static com.google.android.accessibility.talkback.selector.SelectorController.Setting.DICTATION;
+import com.google.android.accessibility.talkback.dictation.DictationController;
 import static com.google.android.accessibility.talkback.selector.SelectorController.Setting.GRANULARITY_WINDOWS;
 import static com.google.android.accessibility.talkback.selector.SelectorController.Setting.TABLET_HELD_UP_FACES_AWAY;
 import static com.google.android.accessibility.utils.Performance.EVENT_ID_UNTRACKED;
@@ -371,6 +373,10 @@ public class SelectorController implements UserInputEventListener {
         R.string.pref_selector_granularity_typo_key,
         R.string.selector_granularity_typo,
         R.bool.pref_selector_granularity_typo_default),
+    DICTATION(
+        R.string.pref_selector_dictation_key,
+        R.string.selector_dictation,
+        R.bool.pref_selector_dictation_default),
     CONTROL_TELLING_TIME(
         R.string.pref_selector_control_telling_time,
         R.string.selector_control_telling_time,
@@ -592,6 +598,7 @@ public class SelectorController implements UserInputEventListener {
   public static final ImmutableList<Setting> SELECTOR_SETTINGS =
       ImmutableList.of(
           Setting.GRANULARITY_TYPO,
+          Setting.DICTATION,
           Setting.ACTIONS,
           // Puts table navigation granularities on top of the selector.
           Setting.GRANULARITY_ROW_COLUMN,
@@ -658,6 +665,7 @@ public class SelectorController implements UserInputEventListener {
 
   /** Selector event notifier. */
   private final SelectorEventNotifier selectorEventNotifier;
+  private @Nullable DictationController dictationController;
 
   private final OnSharedPreferenceChangeListener sharedPreferenceChangeListener =
       (prefs, key) -> {
@@ -676,7 +684,7 @@ public class SelectorController implements UserInputEventListener {
    * Interface for contextual settings, the selector will automatically select the setting if {@link
    * #shouldActivateSetting(Context, AccessibilityNodeInfoCompat)} return true.
    */
-  interface ContextualSetting {
+  public interface ContextualSetting {
     /** Returns the dependent item in {@link Setting}. */
     Setting getSetting();
 
@@ -728,6 +736,7 @@ public class SelectorController implements UserInputEventListener {
     ImmutableList.Builder<Setting> hiddenSettingsBuilder = ImmutableList.builder();
     if (FormFactorUtils.isAndroidWear()) {
       hiddenSettingsBuilder.add(GRANULARITY_TYPO);
+      hiddenSettingsBuilder.add(DICTATION);
       hiddenSettingsBuilder.add(TABLET_HELD_UP_FACES_AWAY);
     } else if (!FeatureSupport.doesServiceHandleDoubleTap()) {
       hiddenSettingsBuilder.add(ACTIONS);
@@ -755,12 +764,21 @@ public class SelectorController implements UserInputEventListener {
     contextualSettingsBuilder.add(new AdjustableWidgetSetting());
     contextualSettingsBuilder.add(new ActionsSetting(nodeMenuCreator, accessibilityFocusMonitor));
     contextualSettingsBuilder.add(new TypoGranularity(accessibilityFocusMonitor));
+    contextualSettingsBuilder.add(new DictationSetting(accessibilityFocusMonitor));
     contextualSettings = contextualSettingsBuilder.build();
 
     resetActionMenuToDefault();
 
     prefs = SharedPreferencesUtils.getSharedPreferences(context);
     prefs.registerOnSharedPreferenceChangeListener(sharedPreferenceChangeListener);
+  }
+
+  public void setDictationController(@Nullable DictationController dictationController) {
+    this.dictationController = dictationController;
+  }
+
+  public @Nullable DictationController getDictationController() {
+    return dictationController;
   }
 
   /** Gets the Setting for by granularity resources ID. */
@@ -1051,6 +1069,10 @@ public class SelectorController implements UserInputEventListener {
       case GRANULARITY_TYPO -> {
         actionDescription = context.getString(R.string.title_pref_selector_typo_granularity);
         hint = getNavigateTypoGestures();
+      }
+      case DICTATION -> {
+        actionDescription = context.getString(R.string.title_pref_selector_dictation);
+        hint = context.getString(R.string.dictation_selector_hint);
       }
       default -> {}
     }
@@ -1559,6 +1581,13 @@ public class SelectorController implements UserInputEventListener {
         }
         return typoGranularity.get().isNodeSupportSetting(context, node);
       }
+      case DICTATION -> {
+        Optional<ContextualSetting> dictationSetting = findContextualSetting(DICTATION);
+        if (dictationSetting.isEmpty()) {
+          return false;
+        }
+        return dictationSetting.get().isNodeSupportSetting(context, node);
+      }
       default -> {
         return true;
       }
@@ -1885,6 +1914,12 @@ public class SelectorController implements UserInputEventListener {
       }
       case GRANULARITY_TYPO -> {
         navigateTypo(eventId, isNext);
+        return;
+      }
+      case DICTATION -> {
+        if (dictationController != null) {
+          dictationController.toggleDictation(eventId);
+        }
         return;
       }
     }

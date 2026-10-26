@@ -2993,6 +2993,16 @@ Description: Explain that the feature is enabled for all images. [CHAR_LIMIT=NON
   Description: Notify user it's ready to find the previous/next misspelled word. [CHAR LIMIT=45]
   -->
   <string name="title_pref_selector_typo_granularity">Proofread</string>
+  <string name="title_pref_selector_dictation">Dictation</string>
+  <string name="summary_dictation">Dictate speech directly into text fields</string>
+  <string name="dictation_selector_hint">Swipe up or down to start or stop dictation</string>
+  <string name="dictation_started">Dictation started. Say your message.</string>
+  <string name="dictation_stopped">Dictation stopped.</string>
+  <string name="dictation_not_editable">Focus on an editable text box to dictate.</string>
+  <string name="dictation_deleted_word">Word deleted.</string>
+  <string name="dictation_cleared">Text cleared.</string>
+  <string name="dictation_undo">Undo.</string>
+  <string name="dictation_empty_text">Text field is empty.</string>
   <!--
   Source: Indicates there is no any SpellSpan in the edit text.
   Description: Notify user it's no typo. [CHAR LIMIT=60]

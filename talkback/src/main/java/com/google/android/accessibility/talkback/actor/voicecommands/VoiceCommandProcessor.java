@@ -102,6 +102,8 @@ import com.google.android.accessibility.talkback.R;
 import com.google.android.accessibility.talkback.TalkBackService;
 import com.google.android.accessibility.talkback.actor.DimScreenActor;
 import com.google.android.accessibility.talkback.actor.gemini.GeminiConfiguration;
+import com.google.android.accessibility.talkback.dictation.DictationController;
+import com.google.android.accessibility.talkback.dictation.DictationPunctuationFormatter;
 import com.google.android.accessibility.talkback.scripting.Scripts;
 import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics;
 import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.VoiceCommandTypeId;
@@ -111,6 +113,7 @@ import com.google.android.accessibility.talkback.focusmanagement.AccessibilityFo
 import com.google.android.accessibility.talkback.menurules.RuleAction;
 import com.google.android.accessibility.talkback.selector.SelectorController;
 import com.google.android.accessibility.talkback.selector.SelectorController.Setting;
+import com.google.android.accessibility.utils.AccessibilityNodeInfoUtils;
 import com.google.android.accessibility.utils.FeatureSupport;
 import com.google.android.accessibility.utils.FormFactorUtils;
 import com.google.android.accessibility.utils.LocaleUtils;
@@ -141,6 +144,7 @@ public class VoiceCommandProcessor {
   private final AccessibilityFocusMonitor accessibilityFocusMonitor;
   private ListMenuManager menuManager;
   private SelectorController selectorController;
+  private @Nullable DictationController dictationController;
   private ActorState actorState;
   private final TalkBackAnalytics analytics;
   private final SystemVoiceCommands systemVoiceCommands;
@@ -307,6 +311,14 @@ public class VoiceCommandProcessor {
     this.selectorController = selectorController;
   }
 
+  public void setDictationController(@Nullable DictationController dictationController) {
+    this.dictationController = dictationController;
+  }
+
+  public @Nullable DictationController getDictationController() {
+    return dictationController;
+  }
+
   private void dimScreenVoiceCommand(EventId eventId) {
     if (DimScreenActor.isSupported(service)) {
       sendInterpretation(VOICE_COMMAND_DIM_SCREEN, eventId);
@@ -331,6 +343,32 @@ public class VoiceCommandProcessor {
     }
     LogUtils.i(LOG_TAG, "handleSpeechCommand() command=\"%s\"", command);
     EventId eventId = EVENT_ID_UNTRACKED;
+
+    // Active Dictation Mode Speech Processing
+    if (dictationController != null && dictationController.isDictationActive()) {
+      if (dictationController.handleDictationSpeech(command, isPartialResult, eventId)) {
+        analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
+        return true;
+      }
+    }
+
+    // Check if command is to start dictation mode
+    if (dictationController != null && dictationController.isDictationStartCommand(command)) {
+      if (!isPartialResult) {
+        dictationController.startDictation(eventId);
+      }
+      analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
+      return true;
+    }
+
+    // Check if command is to stop dictation mode
+    if (dictationController != null && dictationController.isDictationStopCommand(command)) {
+      if (!isPartialResult) {
+        dictationController.stopDictation(eventId, true);
+      }
+      analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
+      return true;
+    }
 
     // Check custom script voice commands
     if (!isPartialResult && Scripts.onVoiceCommand(command)) {
@@ -591,12 +629,23 @@ public class VoiceCommandProcessor {
     // command format: Type *, Input *, Dictate *, Write *, Spell *
     int inputCommand = startsWith(command, typeCommandResArray);
     if (inputCommand >= 0) {
-      node = getEditTextFocus();
-      if (node != null) {
-        CharSequence inputText = remainder(command, inputCommand);
-        if (!TextUtils.isEmpty(inputText)) {
-          sendInterpretation(VOICE_COMMAND_INSERT, node, inputText, eventId);
+      CharSequence inputText = remainder(command, inputCommand);
+      if (TextUtils.isEmpty(inputText)) {
+        if (dictationController != null) {
+          if (!isPartialResult) {
+            dictationController.startDictation(eventId);
+          }
+          handleVoiceCommandRecognized(VOICE_COMMAND_TYPE_INSERT);
+          return true;
         }
+      }
+      node = getEditTextFocus();
+      if (node != null && !TextUtils.isEmpty(inputText)) {
+        CharSequence currentText = AccessibilityNodeInfoUtils.getText(node);
+        String beforeCursor = currentText != null ? currentText.toString() : "";
+        String formatted = DictationPunctuationFormatter.INSTANCE.format(inputText.toString(), beforeCursor);
+        String spacing = DictationPunctuationFormatter.INSTANCE.getPrefixSpacing(beforeCursor, formatted);
+        sendInterpretation(VOICE_COMMAND_INSERT, node, spacing + formatted, eventId);
       }
       handleVoiceCommandRecognized(VOICE_COMMAND_TYPE_INSERT);
       return true;
