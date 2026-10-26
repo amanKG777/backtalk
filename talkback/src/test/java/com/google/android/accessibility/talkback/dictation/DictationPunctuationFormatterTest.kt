@@ -121,4 +121,59 @@ class DictationPunctuationFormatterTest {
     assertEquals("", DictationPunctuationFormatter.getPrefixSpacing(null, "world"))
     assertEquals("", DictationPunctuationFormatter.getPrefixSpacing("", "world"))
   }
+
+  @Test
+  fun replacePhrase_basicReplacement() {
+    val result = DictationPunctuationFormatter.replacePhrase("I have a pear", "pear", "peer")
+    org.junit.Assert.assertNotNull(result)
+    assertEquals("I have a peer", result!!.newText)
+    assertEquals("pear", result.matchedTarget)
+    assertEquals("peer", result.finalReplacement)
+    assertEquals("I have a peer".length, result.newCursor)
+  }
+
+  @Test
+  fun replacePhrase_replacesLastOccurrenceByDefault() {
+    val result = DictationPunctuationFormatter.replacePhrase("apple and apple", "apple", "orange")
+    org.junit.Assert.assertNotNull(result)
+    assertEquals("apple and orange", result!!.newText)
+  }
+
+  @Test
+  fun replacePhrase_replaceAll() {
+    val result = DictationPunctuationFormatter.replacePhrase("apple and apple", "apple", "orange", replaceAll = true)
+    org.junit.Assert.assertNotNull(result)
+    assertEquals("orange and orange", result!!.newText)
+  }
+
+  @Test
+  fun replacePhrase_preservesCasing() {
+    // Capitalized
+    val capResult = DictationPunctuationFormatter.replacePhrase("Pear is tasty", "pear", "apple")
+    org.junit.Assert.assertNotNull(capResult)
+    assertEquals("Apple is tasty", capResult!!.newText)
+
+    // ALL CAPS
+    val upperResult = DictationPunctuationFormatter.replacePhrase("BUY PEAR NOW", "pear", "apple")
+    org.junit.Assert.assertNotNull(upperResult)
+    assertEquals("BUY APPLE NOW", upperResult!!.newText)
+
+    // Lowercase
+    val lowerResult = DictationPunctuationFormatter.replacePhrase("pear is tasty", "PEAR", "apple")
+    org.junit.Assert.assertNotNull(lowerResult)
+    assertEquals("apple is tasty", lowerResult!!.newText)
+  }
+
+  @Test
+  fun replacePhrase_handlesSpokenPunctuationNames() {
+    val result = DictationPunctuationFormatter.replacePhrase("Hello, world", "comma", "period")
+    org.junit.Assert.assertNotNull(result)
+    assertEquals("Hello. world", result!!.newText)
+  }
+
+  @Test
+  fun replacePhrase_notFound_returnsNull() {
+    val result = DictationPunctuationFormatter.replacePhrase("Hello world", "banana", "apple")
+    org.junit.Assert.assertNull(result)
+  }
 }

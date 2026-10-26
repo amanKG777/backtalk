@@ -55,6 +55,12 @@ class DictationController(
         private const val TAG = "DictationController"
         private const val RESTART_DELAY_MS = 350L
         private const val MAX_SILENCE_TIMEOUTS = 1
+
+        private val REPLACE_ALL_REGEX = Regex("(?i)^(?:please\\s+)?replace\\s+(?:all|every)\\s+(.+?)\\s+with\\s+(.+?)(?:\\s+please)?$")
+        private val REPLACE_REGEX = Regex("(?i)^(?:please\\s+)?replace\\s+(.+?)\\s+with\\s+(.+?)(?:\\s+please)?$")
+        private val CHANGE_ALL_REGEX = Regex("(?i)^(?:please\\s+)?change\\s+(?:all|every)\\s+(.+?)\\s+to\\s+(.+?)(?:\\s+please)?$")
+        private val CHANGE_REGEX = Regex("(?i)^(?:please\\s+)?change\\s+(.+?)\\s+to\\s+(.+?)(?:\\s+please)?$")
+        private val SWAP_REGEX = Regex("(?i)^(?:please\\s+)?swap\\s+(.+?)\\s+with\\s+(.+?)(?:\\s+please)?$")
     }
 
     private var pipeline: Pipeline.FeedbackReturner? = null
@@ -230,6 +236,11 @@ class DictationController(
         if (isReadTextCommand(norm)) {
             readCurrentText(targetNode)
             scheduleStartListening(1000L)
+            return true
+        }
+
+        if (handleReplaceCommand(raw, targetNode, eventId)) {
+            scheduleStartListening(RESTART_DELAY_MS)
             return true
         }
 
@@ -433,6 +444,50 @@ class DictationController(
             speak(context.getString(R.string.dictation_cleared))
         }
         return success
+    }
+
+    private fun handleReplaceCommand(raw: String, targetNode: AccessibilityNodeInfoCompat, eventId: EventId?): Boolean {
+        var target: String? = null
+        var replacement: String? = null
+        var replaceAll = false
+
+        REPLACE_ALL_REGEX.matchEntire(raw)?.let {
+            target = it.groupValues[1]
+            replacement = it.groupValues[2]
+            replaceAll = true
+        } ?: REPLACE_REGEX.matchEntire(raw)?.let {
+            target = it.groupValues[1]
+            replacement = it.groupValues[2]
+            replaceAll = false
+        } ?: CHANGE_ALL_REGEX.matchEntire(raw)?.let {
+            target = it.groupValues[1]
+            replacement = it.groupValues[2]
+            replaceAll = true
+        } ?: CHANGE_REGEX.matchEntire(raw)?.let {
+            target = it.groupValues[1]
+            replacement = it.groupValues[2]
+            replaceAll = false
+        } ?: SWAP_REGEX.matchEntire(raw)?.let {
+            target = it.groupValues[1]
+            replacement = it.groupValues[2]
+            replaceAll = false
+        }
+
+        if (target == null || replacement == null) return false
+
+        val currentText = AccessibilityNodeInfoUtils.getText(targetNode)?.toString() ?: ""
+        val result = DictationPunctuationFormatter.replacePhrase(currentText, target, replacement, replaceAll)
+        if (result == null) {
+            speak(context.getString(R.string.dictation_not_found, target))
+            return true
+        }
+
+        undoHistory.push(currentText)
+        val success = setTextAndCursor(targetNode, result.newText, result.newCursor, eventId)
+        if (success) {
+            speak(context.getString(R.string.dictation_replaced, result.matchedTarget, result.finalReplacement))
+        }
+        return true
     }
 
     private fun undo(node: AccessibilityNodeInfoCompat, eventId: EventId?): Boolean {

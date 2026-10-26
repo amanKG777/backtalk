@@ -84,9 +84,7 @@ object DictationPunctuationFormatter {
     var text = rawText.trim()
 
     // 1. Spoken punctuation word replacement using literal quoteReplacement
-    for ((pattern, replacement) in PUNCTUATION_REPLACEMENTS) {
-      text = pattern.replace(text, Matcher.quoteReplacement(replacement))
-    }
+    text = replacePunctuationTokens(text)
 
     // 2. Whitespace normalization around punctuation
     // Remove space before punctuation marks: , . ! ? : ; ) ] } > %
@@ -163,5 +161,116 @@ object DictationPunctuationFormatter {
 
     // Otherwise, separate with a space
     return " "
+  }
+
+  /**
+   * Replaces spoken punctuation words (e.g. "comma" -> ",", "period" -> ".")
+   * without applying casing or whitespace trimming.
+   */
+  fun replacePunctuationTokens(raw: String): String {
+    var text = raw
+    for ((pattern, replacement) in PUNCTUATION_REPLACEMENTS) {
+      text = pattern.replace(text, Matcher.quoteReplacement(replacement))
+    }
+    return text
+  }
+
+  data class ReplaceResult(
+    val newText: String,
+    val newCursor: Int,
+    val matchedTarget: String,
+    val finalReplacement: String
+  )
+
+  /**
+   * Finds and replaces [target] with [replacement] inside [currentText].
+   *
+   * Features:
+   * - Case-insensitive matching.
+   * - Automatically preserves casing of the matched target (Capitalized, ALL CAPS, lowercase).
+   * - Resolves spoken punctuation phrases (e.g. target "comma" matches "," or "comma").
+   * - When [replaceAll] is false, replaces the last occurrence (most recent speech).
+   * - Sets cursor immediately following the newly inserted replacement.
+   *
+   * @return [ReplaceResult] if matched and replaced, null if target not found.
+   */
+  fun replacePhrase(
+    currentText: String,
+    target: String,
+    replacement: String,
+    replaceAll: Boolean = false
+  ): ReplaceResult? {
+    val cleanTarget = target.trim()
+    val cleanReplacement = replacement.trim()
+    if (cleanTarget.isEmpty() || currentText.isEmpty()) return null
+
+    // Determine actual search needle: raw target or formatted punctuation
+    val punctTarget = replacePunctuationTokens(cleanTarget).trim()
+    val searchNeedle = if (currentText.contains(cleanTarget, ignoreCase = true)) {
+      cleanTarget
+    } else if (punctTarget.isNotEmpty() && currentText.contains(punctTarget, ignoreCase = true)) {
+      punctTarget
+    } else {
+      return null
+    }
+
+    // Determine base replacement string (format if punctuation name)
+    val punctReplacement = replacePunctuationTokens(cleanReplacement).trim()
+    val baseReplacement = if (punctReplacement != cleanReplacement) {
+      punctReplacement
+    } else {
+      cleanReplacement
+    }
+
+    fun applyCasing(original: String, rep: String): String {
+      if (rep.isEmpty() || original.isEmpty()) return rep
+      return when {
+        original.all { it.isUpperCase() } && original.length > 1 -> rep.uppercase()
+        original.first().isUpperCase() -> rep.replaceFirstChar { it.uppercase() }
+        else -> rep
+      }
+    }
+
+    if (replaceAll) {
+      val regex = Regex(Regex.escape(searchNeedle), RegexOption.IGNORE_CASE)
+      var lastEnd = 0
+      val sb = StringBuilder()
+      var lastRep = baseReplacement
+
+      val matches = regex.findAll(currentText).toList()
+      if (matches.isEmpty()) return null
+
+      for (match in matches) {
+        sb.append(currentText.substring(lastEnd, match.range.first))
+        val repWithCasing = applyCasing(match.value, baseReplacement)
+        sb.append(repWithCasing)
+        lastEnd = match.range.last + 1
+        lastRep = repWithCasing
+      }
+      sb.append(currentText.substring(lastEnd))
+      val newText = sb.toString()
+      return ReplaceResult(
+        newText = newText,
+        newCursor = newText.length,
+        matchedTarget = searchNeedle,
+        finalReplacement = lastRep
+      )
+    } else {
+      val index = currentText.lastIndexOf(searchNeedle, ignoreCase = true)
+      if (index < 0) return null
+
+      val matchedOriginal = currentText.substring(index, index + searchNeedle.length)
+      val repWithCasing = applyCasing(matchedOriginal, baseReplacement)
+
+      val newText = currentText.substring(0, index) + repWithCasing + currentText.substring(index + searchNeedle.length)
+      val newCursor = index + repWithCasing.length
+
+      return ReplaceResult(
+        newText = newText,
+        newCursor = newCursor,
+        matchedTarget = matchedOriginal,
+        finalReplacement = repWithCasing
+      )
+    }
   }
 }
