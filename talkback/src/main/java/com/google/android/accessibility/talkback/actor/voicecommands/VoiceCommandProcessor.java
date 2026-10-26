@@ -344,12 +344,15 @@ public class VoiceCommandProcessor {
     LogUtils.i(LOG_TAG, "handleSpeechCommand() command=\"%s\"", command);
     EventId eventId = EVENT_ID_UNTRACKED;
 
-    // Active Dictation Mode Speech Processing
+    // Active Dictation Mode Speech Processing - completely isolated layer
     if (dictationController != null && dictationController.isDictationActive()) {
-      if (dictationController.handleDictationSpeech(command, isPartialResult, eventId)) {
-        analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
-        return true;
+      if (!isPartialResult) {
+        boolean handled = dictationController.handleDictationSpeech(command, false, eventId);
+        if (handled) {
+          analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
+        }
       }
+      return true;
     }
 
     // Check if command is to start dictation mode

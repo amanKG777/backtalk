@@ -66,6 +66,10 @@ public class VoiceCommandActor implements SpeechRecognizerRequester {
   public boolean onResult(String command, boolean isPartialResult) {
     LogUtils.v(
         TAG, "handleSpeechCommand with command: \"%s\", isPartial:%b", command, isPartialResult);
+    if (voiceCommandProcessor.getDictationController() != null
+        && voiceCommandProcessor.getDictationController().isDictationActive()) {
+      return voiceCommandProcessor.handleSpeechCommand(command, isPartialResult);
+    }
     return voiceCommandProcessor.handleSpeechCommand(command.toLowerCase(), isPartialResult);
   }
 

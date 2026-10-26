@@ -94,6 +94,8 @@ final class VoiceCommandAndHelpConfigs {
           .addSubText(R.string.voice_commands_help_find_text_description)
           .addTextWithBullet(R.string.voice_commands_find)
           .addSubText(R.string.voice_commands_help_find_description)
+          .addTextWithBullet(R.string.voice_commands_help_click_item)
+          .addSubText(R.string.voice_commands_help_click_item_description)
           .addTextWithBullet(R.string.voice_commands_screen_search)
           .addSubText(R.string.voice_commands_help_screen_search_description);
 
@@ -101,6 +103,12 @@ final class VoiceCommandAndHelpConfigs {
       PageConfig.builder(
               PageId.PAGE_ID_VOICE_COMMAND_TEXT_EDITING, R.string.shortcut_title_text_editing)
           .addTextWithBullet(R.string.voice_commands_help_type_text)
+          .addTextWithBullet(R.string.voice_commands_help_dictate)
+          .addSubText(R.string.voice_commands_help_dictate_description)
+          .addTextWithBullet(R.string.voice_commands_help_replace_text)
+          .addSubText(R.string.voice_commands_help_replace_text_description)
+          .addTextWithBullet(R.string.voice_commands_help_dictation_editing)
+          .addSubText(R.string.voice_commands_help_dictation_editing_description)
           .addTextWithBullet(android.R.string.selectAll)
           .addTextWithBullet(R.string.voice_commands_select)
           .addTextWithBullet(R.string.voice_commands_deselect)
@@ -124,6 +132,10 @@ final class VoiceCommandAndHelpConfigs {
           .addTextWithBullet(R.string.voice_commands_quick_settings)
           .addTextWithBullet(R.string.voice_commands_overview)
           .addSubText(R.string.voice_commands_help_overview_description)
+          .addTextWithBullet(R.string.voice_commands_help_open_app)
+          .addSubText(R.string.voice_commands_help_open_app_description)
+          .addTextWithBullet(R.string.voice_commands_help_system_toggles)
+          .addSubText(R.string.voice_commands_help_system_toggles_description)
           .addTextWithBullet(R.string.voice_commands_all_apps, SUPPORT_SYSTEM_ACTIONS)
           .addTextWithBullet(R.string.voice_commands_assistant)
           .addSubText(R.string.voice_commands_help_assistant_description);

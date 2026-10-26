@@ -54,7 +54,7 @@ class DictationController(
     companion object {
         private const val TAG = "DictationController"
         private const val RESTART_DELAY_MS = 350L
-        private const val MAX_SILENCE_TIMEOUTS = 1
+        private const val MAX_SILENCE_TIMEOUTS = 5
 
         private val REPLACE_ALL_REGEX = Regex("(?i)^(?:please\\s+)?replace\\s+(?:all|every)\\s+(.+?)\\s+with\\s+(.+?)(?:\\s+please)?$")
         private val REPLACE_REGEX = Regex("(?i)^(?:please\\s+)?replace\\s+(.+?)\\s+with\\s+(.+?)(?:\\s+please)?$")

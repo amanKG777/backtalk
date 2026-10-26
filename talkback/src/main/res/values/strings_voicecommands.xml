@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <!--
       Source: Possible user requests from voice commands to read from top.
@@ -340,6 +340,18 @@
   <string name="voice_commands_help_text_editing_description">Type, select, and copy text</string>
   <!-- The description of voice command - input text. [CHAR_LIMIT=NONE] -->
   <string name="voice_commands_help_type_text">Type [OK]</string>
+  <string name="voice_commands_help_dictate">Dictate or Start dictation</string>
+  <string name="voice_commands_help_dictate_description">Start continuous hands-free dictation into an active text field</string>
+  <string name="voice_commands_help_replace_text">Replace [old] with [new]</string>
+  <string name="voice_commands_help_replace_text_description">Find and replace words in the active text field. You can also say \"replace all [old] with [new]\" or \"change [old] to [new]\"</string>
+  <string name="voice_commands_help_dictation_editing">Delete word, backspace, clear text, or undo</string>
+  <string name="voice_commands_help_dictation_editing_description">Spoken editing commands while dictating. You can also say \"read text\" or \"stop dictation\"</string>
+  <string name="voice_commands_help_click_item">Click [Play button]</string>
+  <string name="voice_commands_help_click_item_description">Activate any button or link on screen by name</string>
+  <string name="voice_commands_help_open_app">Open [App Name]</string>
+  <string name="voice_commands_help_open_app_description">Launch any installed application by speaking its name</string>
+  <string name="voice_commands_help_system_toggles">Turn on [Wi-Fi]</string>
+  <string name="voice_commands_help_system_toggles_description">Directly toggle Wi-Fi, hotspot, mobile data, Bluetooth, or Do Not Disturb</string>
 
   <!-- The description of voice command "Copy". [CHAR_LIMIT=NONE] -->
   <string name="voice_commands_help_copy_description">Select text before copying</string>
