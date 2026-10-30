@@ -56,7 +56,8 @@ class DictationController(
         private const val TAG = "DictationController"
         private const val RESTART_DELAY_MS = 350L
         private const val MAX_SILENCE_TIMEOUTS = 5
-        private const val AFTER_SPEECH_DELAY_MS = 300L
+        private const val QUIET_POLL_MS = 150L
+        private const val REQUIRED_QUIET_POLLS = 3
         private const val MAX_RECOGNITION_MS = 20000
         private const val SPEECH_WATCHDOG_MS = 15000L
         private const val PREF_AUTO_PUNCTUATION = "pref_dictation_auto_punctuation"
@@ -76,7 +77,6 @@ class DictationController(
     private var pendingClear = false
     private var bulletMode = false
     private var speechInFlight = 0
-    private var listenWhenQuiet = false
 
     /** Receives results and events from the dictation recognizer only. */
     private val recognitionListener = object : SpeechRecognizerRequester {
@@ -109,6 +109,13 @@ class DictationController(
         SpeechRecognizerPerformer(context, MAX_RECOGNITION_MS, false).also {
             it.setListener(recognitionListener)
         }
+
+    /** Reports whether TalkBack as a whole is speaking or has speech queued. */
+    private var isTalkBackSpeaking: () -> Boolean = { false }
+
+    fun setTalkBackSpeaking(provider: () -> Boolean) {
+        isTalkBackSpeaking = provider
+    }
 
     fun setPipeline(pipeline: Pipeline.FeedbackReturner?) {
         this.pipeline = pipeline
@@ -149,7 +156,6 @@ class DictationController(
         pendingClear = false
         bulletMode = false
         speechInFlight = 0
-        listenWhenQuiet = false
         undoStack.clear()
 
         speak(context.getString(R.string.dictation_started))
@@ -574,33 +580,29 @@ class DictationController(
     }
 
     /**
-     * Restarts the recognizer after [delayMs], but only once all of our own speech has finished:
-     * opening the mic while a confirmation is still being spoken cuts the speech off mid-sentence.
+     * Restarts the recognizer after [delayMs], but only once TalkBack is completely quiet. Opening
+     * the mic interrupts all TalkBack feedback (see VoiceActionMonitor), so starting it while
+     * anything is still being spoken, ours or TalkBack's own text announcements, cuts speech off.
      */
     private fun scheduleStartListening(delayMs: Long) {
         mainHandler.removeCallbacksAndMessages(null)
-        if (speechInFlight > 0) {
-            listenWhenQuiet = true
-            // Watchdog: if a completion callback is never delivered, listen anyway.
-            mainHandler.postDelayed({ speechInFlight = 0; startListeningNow() }, SPEECH_WATCHDOG_MS)
-            return
-        }
-        mainHandler.postDelayed({ startListeningNow() }, delayMs)
+        mainHandler.postDelayed({ startWhenQuiet(0L, 0) }, delayMs)
     }
 
-    private fun startListeningNow() {
-        listenWhenQuiet = false
-        if (isDictationActive) {
+    private fun startWhenQuiet(waitedMs: Long, quietPolls: Int) {
+        if (!isDictationActive) return
+        val busy = speechInFlight > 0 || isTalkBackSpeaking()
+        val quiet = if (busy) 0 else quietPolls + 1
+        if (quiet >= REQUIRED_QUIET_POLLS || waitedMs >= SPEECH_WATCHDOG_MS) {
+            speechInFlight = 0
             recognizer.doListening()
+            return
         }
+        mainHandler.postDelayed({ startWhenQuiet(waitedMs + QUIET_POLL_MS, quiet) }, QUIET_POLL_MS)
     }
 
     private fun onSpeechFinished() {
         if (speechInFlight > 0) speechInFlight--
-        if (speechInFlight == 0 && listenWhenQuiet && isDictationActive) {
-            mainHandler.removeCallbacksAndMessages(null)
-            mainHandler.postDelayed({ startListeningNow() }, AFTER_SPEECH_DELAY_MS)
-        }
     }
 
     private fun speak(text: String) {

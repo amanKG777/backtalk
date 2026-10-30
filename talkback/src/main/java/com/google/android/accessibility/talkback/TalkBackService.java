@@ -2446,6 +2446,7 @@ public class TalkBackService extends AccessibilityServiceCompat
 
     dictationController = new DictationController(this, accessibilityFocusMonitor);
     dictationController.setPipeline(pipeline.getFeedbackReturner());
+    dictationController.setTalkBackSpeaking(speechController::isSpeakingOrSpeechQueued);
     selectorController.setDictationController(dictationController);
     voiceCommandProcessor.setDictationController(dictationController);
 
