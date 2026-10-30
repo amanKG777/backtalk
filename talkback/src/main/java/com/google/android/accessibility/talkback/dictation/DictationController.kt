@@ -25,6 +25,9 @@ import com.google.android.accessibility.talkback.Feedback
 import com.google.android.accessibility.talkback.Pipeline
 import com.google.android.accessibility.talkback.R
 import com.google.android.accessibility.talkback.actor.voicecommands.VoiceCommandFuzzyMatcher
+import com.google.android.accessibility.talkback.ai.AiHost
+import com.google.android.accessibility.talkback.ai.AiRequestParser
+import com.google.android.accessibility.talkback.ai.createBacktalkAi
 import com.google.android.accessibility.talkback.focusmanagement.AccessibilityFocusMonitor
 import com.google.android.accessibility.talkback.utils.SpeechRecognizerPerformer
 import com.google.android.accessibility.talkback.utils.SpeechRecognizerPerformer.SpeechRecognizerRequester
@@ -110,6 +113,44 @@ class DictationController(
             it.setListener(recognitionListener)
         }
 
+    /** The range of the text most recently dictated, so "that" can mean it. Null after any edit. */
+    private var lastDictatedRange: IntRange? = null
+
+    /** Lets Backtalk AI read and edit the field that dictation is typing into. */
+    private val aiHost = object : AiHost {
+        override fun speak(text: String) = this@DictationController.speak(text)
+
+        override fun currentText(): String =
+            getTargetEditableNode()?.let { currentText(it) } ?: ""
+
+        override fun selection(): Pair<Int, Int> {
+            val node = getTargetEditableNode() ?: return 0 to 0
+            val length = currentText(node).length
+            return node.textSelectionStart.coerceIn(0, length) to
+                node.textSelectionEnd.coerceIn(0, length)
+        }
+
+        override fun lastDictated(): IntRange? = lastDictatedRange
+
+        override fun replaceRange(start: Int, end: Int, newText: String) {
+            val node = getTargetEditableNode() ?: return
+            val text = currentText(node)
+            val s = start.coerceIn(0, text.length)
+            val e = end.coerceIn(s, text.length)
+            pushUndo(text, getCursorPosition(node, text), R.string.dictation_label_ai)
+            setTextAndCursor(
+                node, text.substring(0, s) + newText + text.substring(e), s + newText.length,
+                EVENT_ID_UNTRACKED)
+        }
+
+        // Dictation has no on-screen message; "reply to this" belongs to the voice command layer.
+        override fun readOnScreenMessage(): String? = null
+
+        override fun listenForAnswer() = scheduleStartListening(RESTART_DELAY_MS)
+    }
+
+    private val ai = createBacktalkAi(context, aiHost)
+
     /** Reports whether TalkBack as a whole is speaking or has speech queued. */
     private var isTalkBackSpeaking: () -> Boolean = { false }
 
@@ -157,6 +198,8 @@ class DictationController(
         bulletMode = false
         speechInFlight = 0
         undoStack.clear()
+        lastDictatedRange = null
+        ai.cancel()
 
         speak(context.getString(R.string.dictation_started))
         scheduleStartListening(RESTART_DELAY_MS)
@@ -173,6 +216,8 @@ class DictationController(
         pendingClear = false
         bulletMode = false
         undoStack.clear()
+        lastDictatedRange = null
+        ai.cancel()
         mainHandler.removeCallbacksAndMessages(null)
 
         recognizer.stopListening()
@@ -223,6 +268,22 @@ class DictationController(
 
         silenceTimeoutCount = 0
         val norm = VoiceCommandFuzzyMatcher.normalize(raw).lowercase()
+
+        // Backtalk AI: ignore speech while the AI is thinking, route an answer to a pending
+        // question, or start a new "Backtalk, ..." request. Anything else carries on below.
+        if (ai.isWorking) {
+            scheduleStartListening(RESTART_DELAY_MS)
+            return true
+        }
+        if (ai.isAwaitingAnswer && ai.onAnswer(raw)) {
+            scheduleStartListening(RESTART_DELAY_MS)
+            return true
+        }
+        AiRequestParser.parse(raw)?.let { request ->
+            ai.handle(request)
+            scheduleStartListening(RESTART_DELAY_MS)
+            return true
+        }
 
         // A pending "clear" consumes the next utterance only if it is a yes/no answer.
         val clearWasPending = pendingClear
@@ -363,6 +424,8 @@ class DictationController(
         }
         val spacing = DictationPunctuationFormatter.getPrefixSpacing(textBeforeCursor, formattedText)
         if (insertText(node, spacing + formattedText, eventId)) {
+            val start = cursor + spacing.length
+            lastDictatedRange = start until (start + formattedText.length)
             speak(formattedText.trim())
         }
     }
@@ -397,6 +460,7 @@ class DictationController(
 
     private fun pushUndo(text: String, cursor: Int, labelRes: Int) {
         undoStack.push(Snapshot(text, cursor, context.getString(labelRes)))
+        lastDictatedRange = null
     }
 
     /**

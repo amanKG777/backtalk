@@ -3026,6 +3026,18 @@ Description: Explain that the feature is enabled for all images. [CHAR_LIMIT=NON
   <string name="dictation_label_delete">delete</string>
   <string name="dictation_label_edit">edit</string>
   <string name="dictation_label_clear">clear</string>
+  <string name="dictation_label_ai">Backtalk edit</string>
+  <string name="ai_consent_prompt">Backtalk AI will send your text to your AI service. Say yes to allow this, or no to cancel.</string>
+  <string name="ai_cancelled">Cancelled.</string>
+  <string name="ai_nothing_to_change">There is no text to change.</string>
+  <string name="ai_preview">Here is the result: %1$s. Say yes to use it, or no to keep your text.</string>
+  <string name="ai_applied">Done.</string>
+  <string name="ai_not_set_up">Backtalk AI is not set up. Add your AI service or your Gemini key in Backtalk settings.</string>
+  <string name="ai_network_error">I could not reach the AI. Check your connection and try again.</string>
+  <string name="ai_empty_answer">The AI gave no answer. Please try again.</string>
+  <string name="ai_other_error">Something went wrong with the AI. Please try again.</string>
+  <string name="ai_ask_reply_intent">What do you want to say?</string>
+  <string name="ai_no_message">I could not find a message on the screen to reply to.</string>
   <!--
   Source: Indicates there is no any SpellSpan in the edit text.
   Description: Notify user it's no typo. [CHAR LIMIT=60]

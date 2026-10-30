@@ -97,6 +97,10 @@ class BacktalkAiController(
   val isAwaitingAnswer: Boolean
     get() = state !is State.Idle && state !is State.Working
 
+  /** True while a request is with the AI; speech heard now is not an answer to anything. */
+  val isWorking: Boolean
+    get() = state is State.Working
+
   fun handle(request: AiRequest) {
     cancel()
     if (!client.isAvailable()) {

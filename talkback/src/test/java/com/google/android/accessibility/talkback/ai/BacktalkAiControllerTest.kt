@@ -271,4 +271,16 @@ class BacktalkAiControllerTest {
     c.onAnswer("yes")
     assertEquals(listOf(Triple(0, 12, "fixed")), host.replaced)
   }
+
+  @Test
+  fun isWorking_trueOnlyWhileTheAiIsThinking() {
+    val c = controller()
+    assertFalse(c.isWorking)
+    c.handle(AiRequest.FixGrammar)
+    assertTrue(c.isWorking)
+    assertFalse(c.isAwaitingAnswer)
+    client.finish(AiResult.Success("fixed"))
+    assertFalse(c.isWorking)
+    assertTrue(c.isAwaitingAnswer)
+  }
 }
