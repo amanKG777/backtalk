@@ -81,10 +81,41 @@ object DictationPunctuationFormatter {
    */
   fun format(rawText: String, previousText: String? = null): String {
     if (rawText.isBlank()) return ""
-    var text = rawText.trim()
 
     // 1. Spoken punctuation word replacement using literal quoteReplacement
-    text = replacePunctuationTokens(text)
+    return tidy(replacePunctuationTokens(rawText.trim()), previousText)
+  }
+
+  private val QUESTION_WORDS = setOf(
+    "who", "what", "when", "where", "why", "how", "is", "are", "do", "does", "did", "can",
+    "could", "will", "would", "should"
+  )
+
+  /**
+   * Adds a sentence-ending mark to a finished utterance that lacks one: '?' when the last
+   * sentence starts with a question word, otherwise '.'. Text already ending in punctuation or
+   * a line break is returned unchanged.
+   */
+  fun autoPunctuate(text: String): String {
+    val trimmed = text.trimEnd()
+    if (trimmed.isEmpty() || text.endsWith("\n")) return text
+    if (trimmed.last() in ".!?:;,)]\"") return text
+    val lastStart = trimmed.lastIndexOfAny(charArrayOf('.', '!', '?', '\n')) + 1
+    val firstWord = trimmed.substring(lastStart).trim().substringBefore(' ').lowercase()
+    return trimmed + if (firstWord in QUESTION_WORDS) "?" else "."
+  }
+
+  /**
+   * Repairs text already in a field: spacing around punctuation, sentence and "I"
+   * capitalization, and an end mark. Literal words such as "comma" are left alone.
+   */
+  fun fixPunctuation(text: String): String {
+    if (text.isBlank()) return text
+    return autoPunctuate(tidy(text.trim(), null))
+  }
+
+  private fun tidy(input: String, previousText: String?): String {
+    var text = input
 
     // 2. Whitespace normalization around punctuation
     // Remove space before punctuation marks: , . ! ? : ; ) ] } > %

@@ -176,4 +176,31 @@ class DictationPunctuationFormatterTest {
     val result = DictationPunctuationFormatter.replacePhrase("Hello world", "banana", "apple")
     org.junit.Assert.assertNull(result)
   }
+
+  @Test
+  fun autoPunctuate_addsQuestionMarkOrPeriod() {
+    assertEquals("how are you?", DictationPunctuationFormatter.autoPunctuate("how are you"))
+    assertEquals("see you soon.", DictationPunctuationFormatter.autoPunctuate("see you soon"))
+  }
+
+  @Test
+  fun autoPunctuate_leavesFinishedTextAlone() {
+    assertEquals("hello.", DictationPunctuationFormatter.autoPunctuate("hello."))
+    assertEquals("hi\n", DictationPunctuationFormatter.autoPunctuate("hi\n"))
+    assertEquals("", DictationPunctuationFormatter.autoPunctuate(""))
+  }
+
+  @Test
+  fun fixPunctuation_repairsSpacingCapsAndEnd() {
+    assertEquals(
+      "Hello, world. This is I.",
+      DictationPunctuationFormatter.fixPunctuation("hello  ,world .this is i"))
+  }
+
+  @Test
+  fun fixPunctuation_doesNotConvertLiteralWords() {
+    assertEquals(
+      "The word comma is a word.",
+      DictationPunctuationFormatter.fixPunctuation("the word comma is a word"))
+  }
 }
