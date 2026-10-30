@@ -55,6 +55,8 @@ class DictationController(
         private const val TAG = "DictationController"
         private const val RESTART_DELAY_MS = 350L
         private const val MAX_SILENCE_TIMEOUTS = 5
+        private const val AFTER_SPEECH_DELAY_MS = 300L
+        private const val SPEECH_WATCHDOG_MS = 15000L
         private const val PREF_AUTO_PUNCTUATION = "pref_dictation_auto_punctuation"
 
         private val CONFIRM_WORDS = setOf("yes", "yeah", "yep", "confirm", "do it")
@@ -72,6 +74,8 @@ class DictationController(
     private var silenceTimeoutCount = 0
     private var pendingClear = false
     private var bulletMode = false
+    private var speechInFlight = 0
+    private var listenWhenQuiet = false
 
     fun setPipeline(pipeline: Pipeline.FeedbackReturner?) {
         this.pipeline = pipeline
@@ -115,6 +119,8 @@ class DictationController(
         silenceTimeoutCount = 0
         pendingClear = false
         bulletMode = false
+        speechInFlight = 0
+        listenWhenQuiet = false
         undoStack.clear()
 
         speak(context.getString(R.string.dictation_started))
@@ -538,21 +544,44 @@ class DictationController(
         return result
     }
 
+    /**
+     * Restarts the recognizer after [delayMs], but only once all of our own speech has finished:
+     * opening the mic while a confirmation is still being spoken cuts the speech off mid-sentence.
+     */
     private fun scheduleStartListening(delayMs: Long) {
         mainHandler.removeCallbacksAndMessages(null)
-        mainHandler.postDelayed({
-            if (isDictationActive) {
-                pipeline?.returnFeedback(
-                    EVENT_ID_UNTRACKED,
-                    Feedback.voiceRecognition(VoiceRecognition.Action.START_LISTENING, false)
-                )
-            }
-        }, delayMs)
+        if (speechInFlight > 0) {
+            listenWhenQuiet = true
+            // Watchdog: if a completion callback is never delivered, listen anyway.
+            mainHandler.postDelayed({ speechInFlight = 0; startListeningNow() }, SPEECH_WATCHDOG_MS)
+            return
+        }
+        mainHandler.postDelayed({ startListeningNow() }, delayMs)
+    }
+
+    private fun startListeningNow() {
+        listenWhenQuiet = false
+        if (isDictationActive) {
+            pipeline?.returnFeedback(
+                EVENT_ID_UNTRACKED,
+                Feedback.voiceRecognition(VoiceRecognition.Action.START_LISTENING, false)
+            )
+        }
+    }
+
+    private fun onSpeechFinished() {
+        if (speechInFlight > 0) speechInFlight--
+        if (speechInFlight == 0 && listenWhenQuiet && isDictationActive) {
+            mainHandler.removeCallbacksAndMessages(null)
+            mainHandler.postDelayed({ startListeningNow() }, AFTER_SPEECH_DELAY_MS)
+        }
     }
 
     private fun speak(text: String) {
+        speechInFlight++
         val speakOptions = SpeakOptions.create()
             .setFlags(FeedbackItem.FLAG_NO_HISTORY or FeedbackItem.FLAG_FORCE_FEEDBACK_ALL)
+            .setCompletedAction { _ -> mainHandler.post { onSpeechFinished() } }
         pipeline?.returnFeedback(EVENT_ID_UNTRACKED, Feedback.speech(text, speakOptions))
     }
 }
