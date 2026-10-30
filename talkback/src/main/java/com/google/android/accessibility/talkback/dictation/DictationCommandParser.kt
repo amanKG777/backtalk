@@ -168,6 +168,21 @@ object DictationCommandParser {
     return null
   }
 
+  /**
+   * Whether [command] should run against [text]. Phrase-bearing commands whose phrase is not in
+   * the text are really dictation ("delete the file"), so the caller inserts them as text.
+   */
+  @JvmStatic
+  fun appliesTo(command: DictationCommand, text: String): Boolean =
+    when (command) {
+      is DictationCommand.DeletePhrase -> text.contains(command.phrase, ignoreCase = true)
+      is DictationCommand.InsertAround -> text.contains(command.phrase, ignoreCase = true)
+      is DictationCommand.CapitalizeWord -> text.contains(command.word, ignoreCase = true)
+      is DictationCommand.Replace ->
+        DictationPunctuationFormatter.replacePhrase(text, command.target, command.replacement, command.all) != null
+      else -> true
+    }
+
   @JvmStatic
   fun isStopCommand(raw: String): Boolean = parse(raw) == DictationCommand.Stop
 

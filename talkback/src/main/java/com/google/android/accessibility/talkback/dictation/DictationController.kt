@@ -192,8 +192,8 @@ class DictationController(
             return true
         }
 
-        val parsed = DictationCommandParser.parse(raw)
-        if (parsed == DictationCommand.Stop) {
+        val rawParsed = DictationCommandParser.parse(raw)
+        if (rawParsed == DictationCommand.Stop) {
             stopDictation(eventId, userInitiated = true)
             return true
         }
@@ -204,6 +204,9 @@ class DictationController(
             speak(context.getString(R.string.dictation_not_editable))
             return true
         }
+
+        // A phrase command whose phrase isn't in the text is ordinary dictation.
+        val parsed = rawParsed?.takeIf { DictationCommandParser.appliesTo(it, currentText(targetNode)) }
 
         if (clearWasPending && norm in CONFIRM_WORDS) {
             clearAllText(targetNode, eventId)

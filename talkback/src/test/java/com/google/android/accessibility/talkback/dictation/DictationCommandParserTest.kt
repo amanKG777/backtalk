@@ -106,4 +106,16 @@ class DictationCommandParserTest {
     assertEquals(DictationCommand.Stop, DictationCommandParser.parse("stop"))
     assertEquals(DictationCommand.Undo, DictationCommandParser.parse("undo that"))
   }
+
+  @Test
+  fun appliesTo_phraseCommandsNeedTheirPhraseInTheText() {
+    val text = "Please send the report tomorrow"
+    assertEquals(false, DictationCommandParser.appliesTo(DictationCommand.DeletePhrase("the file"), text))
+    assertEquals(true, DictationCommandParser.appliesTo(DictationCommand.DeletePhrase("the report"), text))
+    assertEquals(false, DictationCommandParser.appliesTo(DictationCommand.Replace("plan", "idea", false), text))
+    assertEquals(true, DictationCommandParser.appliesTo(DictationCommand.Replace("report", "memo", false), text))
+    assertEquals(false, DictationCommandParser.appliesTo(DictationCommand.InsertAround("x", "nope", true), text))
+    assertEquals(false, DictationCommandParser.appliesTo(DictationCommand.CapitalizeWord("monday"), text))
+    assertEquals(true, DictationCommandParser.appliesTo(DictationCommand.Undo, text))
+  }
 }
