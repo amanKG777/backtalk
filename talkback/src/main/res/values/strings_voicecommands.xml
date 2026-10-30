@@ -354,6 +354,12 @@
   <string name="voice_commands_help_dictation_format_description">Format the last word. Say \"capitalize [word]\" for a specific word, or \"new line\" twice to end a bullet list</string>
   <string name="voice_commands_help_dictation_punctuation">Fix punctuation, or auto punctuation on or off</string>
   <string name="voice_commands_help_dictation_punctuation_description">Repair punctuation and capital letters in the text, or have commas and full stops added automatically as you speak. Say \"command return\" for a new line from a single word</string>
+  <string name="voice_commands_help_ai_edit">Backtalk, fix grammar, or Backtalk, make that shorter</string>
+  <string name="voice_commands_help_ai_edit_description">AI edits your text. Also \"make that more polite\", \"make that more formal\". You hear the result first and say yes to use it, or undo afterwards</string>
+  <string name="voice_commands_help_ai_translate">Backtalk, translate that to [language]</string>
+  <string name="voice_commands_help_ai_translate_description">AI translates your selected text, the last sentence you dictated, or the whole text box</string>
+  <string name="voice_commands_help_ai_reply">Backtalk, reply to this</string>
+  <string name="voice_commands_help_ai_reply_description">AI reads the message you are focused on, asks what you want to say, and writes the reply into the text box after you say yes</string>
   <string name="voice_commands_help_click_item">Click [Play button]</string>
   <string name="voice_commands_help_click_item_description">Activate any button or link on screen by name</string>
   <string name="voice_commands_help_open_app">Open [App Name]</string>

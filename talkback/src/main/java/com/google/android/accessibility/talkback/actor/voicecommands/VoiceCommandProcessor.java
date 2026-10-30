@@ -104,6 +104,10 @@ import com.google.android.accessibility.talkback.actor.DimScreenActor;
 import com.google.android.accessibility.talkback.actor.gemini.GeminiConfiguration;
 import com.google.android.accessibility.talkback.dictation.DictationController;
 import com.google.android.accessibility.talkback.dictation.DictationPunctuationFormatter;
+import com.google.android.accessibility.talkback.ai.AiRequest;
+import com.google.android.accessibility.talkback.ai.AiRequestParser;
+import com.google.android.accessibility.talkback.ai.AndroidAiSupportKt;
+import com.google.android.accessibility.talkback.ai.BacktalkAiController;
 import com.google.android.accessibility.talkback.scripting.Scripts;
 import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics;
 import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.VoiceCommandTypeId;
@@ -145,6 +149,8 @@ public class VoiceCommandProcessor {
   private ListMenuManager menuManager;
   private SelectorController selectorController;
   private @Nullable DictationController dictationController;
+  private final VoiceCommandAiHost aiHost;
+  private final BacktalkAiController backtalkAi;
   private ActorState actorState;
   private final TalkBackAnalytics analytics;
   private final SystemVoiceCommands systemVoiceCommands;
@@ -271,6 +277,14 @@ public class VoiceCommandProcessor {
     this.selectorController = selectorController;
     this.analytics = analytics;
     this.systemVoiceCommands = new SystemVoiceCommands(service, null, null, null);
+    this.aiHost = new VoiceCommandAiHost(service, accessibilityFocusMonitor, () -> this.pipeline);
+    this.backtalkAi = AndroidAiSupportKt.createBacktalkAi(service, aiHost);
+  }
+
+  /** Whether [command] asks to undo the last Backtalk AI edit. */
+  private static boolean isAiUndoPhrase(String command) {
+    String c = command.trim().toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z ]", "");
+    return c.equals("undo") || c.equals("undo that") || c.equals("undo the change");
   }
 
   public void setPipeline(Pipeline.FeedbackReturner pipeline) {
@@ -346,6 +360,35 @@ public class VoiceCommandProcessor {
 
     // Dictation speech never reaches this layer: DictationController runs its own recognizer.
     // This layer only knows the command that starts dictation.
+    // Backtalk AI ("Backtalk, make that shorter"): its own layer. While it is waiting for the AI or
+    // for the user's yes/no, it owns the next final result.
+    if (backtalkAi.isWorking() || backtalkAi.isAwaitingAnswer()) {
+      if (isPartialResult) {
+        return false;
+      }
+      if (backtalkAi.isWorking()) {
+        return true;
+      }
+      if (backtalkAi.onAnswer(command)) {
+        analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
+        return true;
+      }
+    }
+    if (aiHost.canUndo() && !isPartialResult && isAiUndoPhrase(command)) {
+      aiHost.undo();
+      analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
+      return true;
+    }
+    AiRequest aiRequest = AiRequestParser.parseWithoutPrefix(command);
+    if (aiRequest != null) {
+      if (isPartialResult) {
+        return false;
+      }
+      backtalkAi.handle(aiRequest);
+      analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
+      return true;
+    }
+
     // Check if command is to start dictation mode
     if (dictationController != null && dictationController.isDictationStartCommand(command)) {
       if (!isPartialResult) {

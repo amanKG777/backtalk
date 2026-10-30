@@ -3038,6 +3038,8 @@ Description: Explain that the feature is enabled for all images. [CHAR_LIMIT=NON
   <string name="ai_other_error">Something went wrong with the AI. Please try again.</string>
   <string name="ai_ask_reply_intent">What do you want to say?</string>
   <string name="ai_no_message">I could not find a message on the screen to reply to.</string>
+  <string name="ai_no_text_box">Focus a text box first, then try again.</string>
+  <string name="ai_undone">Undone.</string>
   <!--
   Source: Indicates there is no any SpellSpan in the edit text.
   Description: Notify user it's no typo. [CHAR LIMIT=60]
