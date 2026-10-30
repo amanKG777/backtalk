@@ -346,6 +346,14 @@
   <string name="voice_commands_help_replace_text_description">Find and replace words in the active text field. You can also say \"replace all [old] with [new]\" or \"change [old] to [new]\"</string>
   <string name="voice_commands_help_dictation_editing">Delete word, backspace, clear text, or undo</string>
   <string name="voice_commands_help_dictation_editing_description">Spoken editing commands while dictating. You can also say \"read text\" or \"stop dictation\"</string>
+  <string name="voice_commands_help_dictation_text_edit">Delete last sentence, delete [phrase], or insert [text] after [phrase]</string>
+  <string name="voice_commands_help_dictation_text_edit_description">More dictation editing. Also \"insert [text] before [phrase]\", \"clear\" (asks you to say yes), and \"undo\" repeatedly to step back</string>
+  <string name="voice_commands_help_dictation_cursor">Go to start, go to end, or back two words</string>
+  <string name="voice_commands_help_dictation_cursor_description">Move the cursor while dictating. Say \"forward three words\" to move ahead</string>
+  <string name="voice_commands_help_dictation_format">Capitalize that, all caps, lowercase that, or bullet list</string>
+  <string name="voice_commands_help_dictation_format_description">Format the last word. Say \"capitalize [word]\" for a specific word, or \"new line\" twice to end a bullet list</string>
+  <string name="voice_commands_help_dictation_punctuation">Fix punctuation, or auto punctuation on or off</string>
+  <string name="voice_commands_help_dictation_punctuation_description">Repair punctuation and capital letters in the text, or have commas and full stops added automatically as you speak. Say \"command return\" for a new line from a single word</string>
   <string name="voice_commands_help_click_item">Click [Play button]</string>
   <string name="voice_commands_help_click_item_description">Activate any button or link on screen by name</string>
   <string name="voice_commands_help_open_app">Open [App Name]</string>
