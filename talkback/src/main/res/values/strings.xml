@@ -3005,6 +3005,27 @@ Description: Explain that the feature is enabled for all images. [CHAR_LIMIT=NON
   <string name="dictation_empty_text">Text field is empty.</string>
   <string name="dictation_replaced">Replaced %1$s with %2$s.</string>
   <string name="dictation_not_found">Could not find %1$s.</string>
+  <string name="dictation_confirm_clear">Clear all text? Say yes to confirm.</string>
+  <string name="dictation_clear_cancelled">Clear cancelled.</string>
+  <string name="dictation_nothing_to_do">Nothing to do.</string>
+  <string name="dictation_nothing_to_undo">Nothing to undo.</string>
+  <string name="dictation_undid">Undid %1$s.</string>
+  <string name="dictation_deleted_what">Deleted %1$s.</string>
+  <string name="dictation_changed">%1$s</string>
+  <string name="dictation_moved">Moved to %1$s.</string>
+  <string name="dictation_new_line">New line.</string>
+  <string name="dictation_new_paragraph">New paragraph.</string>
+  <string name="dictation_char_deleted">Character deleted.</string>
+  <string name="dictation_bullets_started">Bullet list started. Say new line for the next bullet, or new line twice to finish.</string>
+  <string name="dictation_bullets_ended">Bullet list ended.</string>
+  <string name="dictation_punctuation_fixed">Punctuation fixed.</string>
+  <string name="dictation_punctuation_ok">Punctuation already looks correct.</string>
+  <string name="dictation_auto_punct_on">Auto punctuation on.</string>
+  <string name="dictation_auto_punct_off">Auto punctuation off.</string>
+  <string name="dictation_label_typing">typing</string>
+  <string name="dictation_label_delete">delete</string>
+  <string name="dictation_label_edit">edit</string>
+  <string name="dictation_label_clear">clear</string>
   <!--
   Source: Indicates there is no any SpellSpan in the edit text.
   Description: Notify user it's no typo. [CHAR LIMIT=60]

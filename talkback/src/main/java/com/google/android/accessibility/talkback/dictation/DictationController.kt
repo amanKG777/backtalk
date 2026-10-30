@@ -32,10 +32,9 @@ import com.google.android.accessibility.utils.AccessibilityNodeInfoUtils
 import com.google.android.accessibility.utils.Performance.EVENT_ID_UNTRACKED
 import com.google.android.accessibility.utils.Performance.EventId
 import com.google.android.accessibility.utils.PerformActionUtils
+import com.google.android.accessibility.utils.SharedPreferencesUtils
 import com.google.android.accessibility.utils.output.FeedbackItem
 import com.google.android.accessibility.utils.output.SpeechController.SpeakOptions
-import com.google.android.libraries.accessibility.utils.log.LogUtils
-import java.util.ArrayDeque
 
 /**
  * Controller for Backtalk's Dictation Mode.
@@ -43,7 +42,8 @@ import java.util.ArrayDeque
  * Provides:
  * - Hands-free continuous dictation session directly into focused text fields
  * - Spoken punctuation & symbol parsing via [DictationPunctuationFormatter]
- * - Spoken voice editing commands: "delete word", "delete character", "clear text", "undo", "new line", "read text"
+ * - Spoken editing commands parsed by [DictationCommandParser] and applied with [DictationTextEditor]
+ * - Multi-level undo ([DictationUndoStack]) and optional auto punctuation
  * - Voice command toggle ("dictate", "start dictation", "dictation mode", "stop dictation")
  * - Reading Controls (Selector) toggle integration
  */
@@ -55,12 +55,10 @@ class DictationController(
         private const val TAG = "DictationController"
         private const val RESTART_DELAY_MS = 350L
         private const val MAX_SILENCE_TIMEOUTS = 5
+        private const val PREF_AUTO_PUNCTUATION = "pref_dictation_auto_punctuation"
 
-        private val REPLACE_ALL_REGEX = Regex("(?i)^(?:please\\s+)?replace\\s+(?:all|every)\\s+(.+?)\\s+with\\s+(.+?)(?:\\s+please)?$")
-        private val REPLACE_REGEX = Regex("(?i)^(?:please\\s+)?replace\\s+(.+?)\\s+with\\s+(.+?)(?:\\s+please)?$")
-        private val CHANGE_ALL_REGEX = Regex("(?i)^(?:please\\s+)?change\\s+(?:all|every)\\s+(.+?)\\s+to\\s+(.+?)(?:\\s+please)?$")
-        private val CHANGE_REGEX = Regex("(?i)^(?:please\\s+)?change\\s+(.+?)\\s+to\\s+(.+?)(?:\\s+please)?$")
-        private val SWAP_REGEX = Regex("(?i)^(?:please\\s+)?swap\\s+(.+?)\\s+with\\s+(.+?)(?:\\s+please)?$")
+        private val CONFIRM_WORDS = setOf("yes", "yeah", "yep", "confirm", "do it")
+        private val DENY_WORDS = setOf("no", "nope", "cancel", "don t", "dont")
     }
 
     private var pipeline: Pipeline.FeedbackReturner? = null
@@ -70,8 +68,10 @@ class DictationController(
     var isDictationActive: Boolean = false
         private set
 
-    private val undoHistory = ArrayDeque<String>()
+    private val undoStack = DictationUndoStack()
     private var silenceTimeoutCount = 0
+    private var pendingClear = false
+    private var bulletMode = false
 
     fun setPipeline(pipeline: Pipeline.FeedbackReturner?) {
         this.pipeline = pipeline
@@ -113,11 +113,9 @@ class DictationController(
 
         isDictationActive = true
         silenceTimeoutCount = 0
-        undoHistory.clear()
-
-        // Push current text as initial undo state
-        val initialText = AccessibilityNodeInfoUtils.getText(targetNode)?.toString() ?: ""
-        undoHistory.push(initialText)
+        pendingClear = false
+        bulletMode = false
+        undoStack.clear()
 
         speak(context.getString(R.string.dictation_started))
         scheduleStartListening(RESTART_DELAY_MS)
@@ -131,7 +129,9 @@ class DictationController(
         if (!isDictationActive) return
         isDictationActive = false
         silenceTimeoutCount = 0
-        undoHistory.clear()
+        pendingClear = false
+        bulletMode = false
+        undoStack.clear()
         mainHandler.removeCallbacksAndMessages(null)
 
         voiceCommandActor?.stopListening()
@@ -183,8 +183,17 @@ class DictationController(
         silenceTimeoutCount = 0
         val norm = VoiceCommandFuzzyMatcher.normalize(raw).lowercase()
 
-        // 1. Exit / Stop dictation
-        if (isStopCommand(norm)) {
+        // A pending "clear" consumes the next utterance only if it is a yes/no answer.
+        val clearWasPending = pendingClear
+        pendingClear = false
+        if (clearWasPending && norm in DENY_WORDS) {
+            speak(context.getString(R.string.dictation_clear_cancelled))
+            scheduleStartListening(RESTART_DELAY_MS)
+            return true
+        }
+
+        val parsed = DictationCommandParser.parse(raw)
+        if (parsed == DictationCommand.Stop) {
             stopDictation(eventId, userInitiated = true)
             return true
         }
@@ -196,70 +205,122 @@ class DictationController(
             return true
         }
 
-        // 2. Editing & Correction Commands
-        if (isDeleteWordCommand(norm)) {
-            deleteLastWord(targetNode, eventId)
-            scheduleStartListening(RESTART_DELAY_MS)
-            return true
-        }
-
-        if (isDeleteCharacterCommand(norm)) {
-            deleteLastCharacter(targetNode, eventId)
-            scheduleStartListening(RESTART_DELAY_MS)
-            return true
-        }
-
-        if (isClearCommand(norm)) {
+        if (clearWasPending && norm in CONFIRM_WORDS) {
             clearAllText(targetNode, eventId)
-            scheduleStartListening(RESTART_DELAY_MS)
-            return true
+        } else if (parsed != null) {
+            runCommand(parsed, targetNode, eventId)
+        } else {
+            insertDictatedText(raw, targetNode, eventId)
         }
+        scheduleStartListening(if (parsed == DictationCommand.ReadAll) 1000L else RESTART_DELAY_MS)
+        return true
+    }
 
-        if (isUndoCommand(norm)) {
-            undo(targetNode, eventId)
-            scheduleStartListening(RESTART_DELAY_MS)
-            return true
+    private fun runCommand(
+        command: DictationCommand,
+        node: AccessibilityNodeInfoCompat,
+        eventId: EventId?
+    ) {
+        val text = currentText(node)
+        val cursor = getCursorPosition(node, text)
+        when (command) {
+            DictationCommand.Stop -> Unit // handled by the caller
+            DictationCommand.DeleteWord -> deleteLastWord(node, eventId)
+            DictationCommand.DeleteChar -> deleteLastCharacter(node, eventId)
+            DictationCommand.Clear -> {
+                if (text.isEmpty()) {
+                    speak(context.getString(R.string.dictation_empty_text))
+                } else {
+                    pendingClear = true
+                    speak(context.getString(R.string.dictation_confirm_clear))
+                }
+            }
+            DictationCommand.Undo -> undo(node, eventId)
+            DictationCommand.NewLine -> {
+                if (bulletMode) {
+                    val r = DictationTextEditor.continueBullet(text, cursor)
+                    if (r.feedback == EditFeedback.BulletEnded) bulletMode = false
+                    applyEdit(node, text, cursor, r, R.string.dictation_label_edit, eventId)
+                } else {
+                    insertText(node, "\n", eventId)
+                    speak(context.getString(R.string.dictation_new_line))
+                }
+            }
+            DictationCommand.NewParagraph -> {
+                insertText(node, "\n\n", eventId)
+                speak(context.getString(R.string.dictation_new_paragraph))
+            }
+            DictationCommand.ReadAll -> readCurrentText(node)
+            DictationCommand.ReadLastSentence ->
+                speak(DictationTextEditor.lastSentence(text, cursor)
+                    ?: context.getString(R.string.dictation_nothing_to_do))
+            DictationCommand.ReadLastWord ->
+                speak(DictationTextEditor.lastWord(text, cursor)
+                    ?: context.getString(R.string.dictation_nothing_to_do))
+            DictationCommand.FixPunctuation -> {
+                val fixed = DictationPunctuationFormatter.fixPunctuation(text)
+                if (fixed == text) {
+                    speak(context.getString(R.string.dictation_punctuation_ok))
+                } else {
+                    val r = EditResult(fixed, fixed.length, EditFeedback.Changed(""))
+                    applyEdit(node, text, cursor, r, R.string.dictation_label_edit, eventId)
+                    speak(context.getString(R.string.dictation_punctuation_fixed))
+                }
+            }
+            DictationCommand.CapitalizeThat -> applyEdit(node, text, cursor,
+                DictationTextEditor.capitalizeThat(text, cursor), R.string.dictation_label_edit, eventId)
+            DictationCommand.UpperCaseThat -> applyEdit(node, text, cursor,
+                DictationTextEditor.upperCaseThat(text, cursor), R.string.dictation_label_edit, eventId)
+            DictationCommand.LowerCaseThat -> applyEdit(node, text, cursor,
+                DictationTextEditor.lowerCaseThat(text, cursor), R.string.dictation_label_edit, eventId)
+            DictationCommand.BulletList -> {
+                bulletMode = true
+                val r = DictationTextEditor.startBullet(text, cursor)
+                applyEdit(node, text, cursor, r, R.string.dictation_label_edit, eventId, speakResult = false)
+                speak(context.getString(R.string.dictation_bullets_started))
+            }
+            DictationCommand.GoToStart -> applyEdit(node, text, cursor,
+                DictationTextEditor.goToStart(text, cursor), R.string.dictation_label_edit, eventId)
+            DictationCommand.GoToEnd -> applyEdit(node, text, cursor,
+                DictationTextEditor.goToEnd(text, cursor), R.string.dictation_label_edit, eventId)
+            DictationCommand.DeleteLastSentence -> applyEdit(node, text, cursor,
+                DictationTextEditor.deleteLastSentence(text, cursor), R.string.dictation_label_delete, eventId)
+            is DictationCommand.AutoPunctuation -> {
+                SharedPreferencesUtils.getSharedPreferences(context).edit()
+                    .putBoolean(PREF_AUTO_PUNCTUATION, command.on).apply()
+                speak(context.getString(
+                    if (command.on) R.string.dictation_auto_punct_on else R.string.dictation_auto_punct_off))
+            }
+            is DictationCommand.Move -> applyEdit(node, text, cursor,
+                DictationTextEditor.moveWords(text, cursor, command.words), R.string.dictation_label_edit, eventId)
+            is DictationCommand.CapitalizeWord -> applyEdit(node, text, cursor,
+                DictationTextEditor.capitalizeWord(text, cursor, command.word), R.string.dictation_label_edit, eventId)
+            is DictationCommand.DeletePhrase -> applyEdit(node, text, cursor,
+                DictationTextEditor.deletePhrase(text, cursor, command.phrase), R.string.dictation_label_delete, eventId)
+            is DictationCommand.InsertAround -> applyEdit(node, text, cursor,
+                DictationTextEditor.insertAround(text, cursor, command.text, command.phrase, command.before),
+                R.string.dictation_label_edit, eventId)
+            is DictationCommand.Replace -> replacePhrase(node, text, command, eventId)
         }
+    }
 
-        if (isNewlineCommand(norm)) {
-            insertText(targetNode, "\n", eventId)
-            scheduleStartListening(RESTART_DELAY_MS)
-            return true
-        }
-
-        if (isNewParagraphCommand(norm)) {
-            insertText(targetNode, "\n\n", eventId)
-            scheduleStartListening(RESTART_DELAY_MS)
-            return true
-        }
-
-        if (isReadTextCommand(norm)) {
-            readCurrentText(targetNode)
-            scheduleStartListening(1000L)
-            return true
-        }
-
-        if (handleReplaceCommand(raw, targetNode, eventId)) {
-            scheduleStartListening(RESTART_DELAY_MS)
-            return true
-        }
-
-        // 3. Spoken Text with Smart Punctuation
-        val currentText = AccessibilityNodeInfoUtils.getText(targetNode)?.toString() ?: ""
-        val cursor = getCursorPosition(targetNode, currentText)
+    private fun insertDictatedText(raw: String, node: AccessibilityNodeInfoCompat, eventId: EventId?) {
+        val currentText = currentText(node)
+        val cursor = getCursorPosition(node, currentText)
         val textBeforeCursor = if (cursor in 1..currentText.length) {
             currentText.substring(0, cursor)
         } else {
             currentText
         }
 
-        val formattedText = DictationPunctuationFormatter.format(raw, textBeforeCursor)
+        var formattedText = DictationPunctuationFormatter.format(raw, textBeforeCursor)
+        if (isAutoPunctuationEnabled()) {
+            formattedText = DictationPunctuationFormatter.autoPunctuate(formattedText)
+        }
         val spacing = DictationPunctuationFormatter.getPrefixSpacing(textBeforeCursor, formattedText)
-        val toInsert = spacing + formattedText
-
-        insertText(targetNode, toInsert, eventId)
-        scheduleStartListening(RESTART_DELAY_MS)
-        return true
+        if (insertText(node, spacing + formattedText, eventId)) {
+            speak(formattedText.trim())
+        }
     }
 
     fun isDictationStartCommand(command: String): Boolean {
@@ -276,112 +337,75 @@ class DictationController(
         )
     }
 
-    fun isDictationStopCommand(command: String): Boolean {
-        val norm = VoiceCommandFuzzyMatcher.normalize(command).lowercase()
-        return isStopCommand(norm)
-    }
+    fun isDictationStopCommand(command: String): Boolean =
+        DictationCommandParser.isStopCommand(command)
 
-    private fun isStopCommand(norm: String): Boolean {
-        return norm in setOf(
-            "stop dictation",
-            "exit dictation",
-            "finish dictation",
-            "end dictation",
-            "turn off dictation",
-            "stop",
-            "done",
-            "finish",
-            "exit",
-            "cancel",
-            "quit"
-        )
-    }
+    private fun isAutoPunctuationEnabled(): Boolean =
+        SharedPreferencesUtils.getSharedPreferences(context).getBoolean(PREF_AUTO_PUNCTUATION, false)
 
-    private fun isDeleteWordCommand(norm: String): Boolean {
-        return norm in setOf(
-            "delete word",
-            "delete last word",
-            "backspace word",
-            "remove word",
-            "erase word",
-            "delete previous word"
-        )
-    }
-
-    private fun isDeleteCharacterCommand(norm: String): Boolean {
-        return norm in setOf(
-            "delete character",
-            "delete letter",
-            "backspace",
-            "remove letter",
-            "delete last letter"
-        )
-    }
-
-    private fun isClearCommand(norm: String): Boolean {
-        return norm in setOf(
-            "clear text",
-            "clear all",
-            "delete all",
-            "erase text",
-            "erase all",
-            "delete everything",
-            "clear everything",
-            "clear"
-        )
-    }
-
-    private fun isUndoCommand(norm: String): Boolean {
-        return norm in setOf(
-            "undo",
-            "revert",
-            "undo that",
-            "undo last"
-        )
-    }
-
-    private fun isNewlineCommand(norm: String): Boolean {
-        return norm in setOf(
-            "new line",
-            "next line",
-            "enter",
-            "newline",
-            "return"
-        )
-    }
-
-    private fun isNewParagraphCommand(norm: String): Boolean {
-        return norm in setOf(
-            "new paragraph",
-            "paragraph"
-        )
-    }
-
-    private fun isReadTextCommand(norm: String): Boolean {
-        return norm in setOf(
-            "read text",
-            "read all",
-            "read message",
-            "read back",
-            "what did i say",
-            "read"
-        )
-    }
+    private fun currentText(node: AccessibilityNodeInfoCompat): String =
+        AccessibilityNodeInfoUtils.getText(node)?.toString() ?: ""
 
     private fun getCursorPosition(node: AccessibilityNodeInfoCompat, currentText: String): Int {
         val selEnd = node.textSelectionEnd
         return if (selEnd in 0..currentText.length) selEnd else currentText.length
     }
 
-    private fun insertText(node: AccessibilityNodeInfoCompat, textToInsert: String, eventId: EventId?): Boolean {
-        val currentText = AccessibilityNodeInfoUtils.getText(node)?.toString() ?: ""
-        undoHistory.push(currentText)
+    private fun pushUndo(text: String, cursor: Int, labelRes: Int) {
+        undoStack.push(Snapshot(text, cursor, context.getString(labelRes)))
+    }
 
+    /**
+     * Applies an [EditResult]: records undo, writes text and cursor, and speaks the outcome.
+     * Cursor-only results just move the selection.
+     */
+    private fun applyEdit(
+        node: AccessibilityNodeInfoCompat,
+        oldText: String,
+        oldCursor: Int,
+        result: EditResult,
+        labelRes: Int,
+        eventId: EventId?,
+        speakResult: Boolean = true,
+    ) {
+        when (val fb = result.feedback) {
+            is EditFeedback.NotFound -> {
+                speak(context.getString(R.string.dictation_not_found, fb.what))
+                return
+            }
+            EditFeedback.NothingToDo -> {
+                speak(context.getString(R.string.dictation_nothing_to_do))
+                return
+            }
+            else -> Unit
+        }
+
+        if (result.text != oldText) {
+            pushUndo(oldText, oldCursor, labelRes)
+            setTextAndCursor(node, result.text, result.cursor, eventId)
+        } else {
+            setSelection(node, result.cursor, eventId)
+        }
+        if (!speakResult) return
+        when (val fb = result.feedback) {
+            is EditFeedback.Inserted -> speak(context.getString(R.string.dictation_changed, fb.text))
+            is EditFeedback.Deleted -> speak(context.getString(R.string.dictation_deleted_what, fb.what))
+            is EditFeedback.Changed ->
+                if (fb.what.isNotEmpty()) speak(context.getString(R.string.dictation_changed, fb.what))
+            is EditFeedback.Moved -> speak(context.getString(R.string.dictation_moved, fb.description))
+            EditFeedback.BulletEnded -> speak(context.getString(R.string.dictation_bullets_ended))
+            else -> Unit
+        }
+    }
+
+    private fun insertText(node: AccessibilityNodeInfoCompat, textToInsert: String, eventId: EventId?): Boolean {
+        val currentText = currentText(node)
         val selStart = if (node.textSelectionStart in 0..currentText.length) node.textSelectionStart else currentText.length
         val selEnd = if (node.textSelectionEnd in 0..currentText.length) node.textSelectionEnd else currentText.length
 
         val start = minOf(selStart, selEnd)
         val end = maxOf(selStart, selEnd)
+        pushUndo(currentText, start, R.string.dictation_label_typing)
 
         val newText = StringBuilder(currentText.substring(0, start))
             .append(textToInsert)
@@ -393,29 +417,25 @@ class DictationController(
     }
 
     private fun deleteLastWord(node: AccessibilityNodeInfoCompat, eventId: EventId?): Boolean {
-        val currentText = AccessibilityNodeInfoUtils.getText(node)?.toString() ?: return false
-        if (currentText.isEmpty()) return false
-        undoHistory.push(currentText)
-
+        val currentText = currentText(node)
+        if (currentText.isEmpty()) {
+            speak(context.getString(R.string.dictation_empty_text))
+            return false
+        }
         val cursor = getCursorPosition(node, currentText)
         val beforeCursor = currentText.substring(0, cursor)
         val afterCursor = currentText.substring(cursor)
 
         val trimmedBefore = beforeCursor.trimEnd()
         if (trimmedBefore.isEmpty()) {
-            val newText = afterCursor
-            return setTextAndCursor(node, newText, 0, eventId)
+            speak(context.getString(R.string.dictation_nothing_to_do))
+            return false
         }
+        pushUndo(currentText, cursor, R.string.dictation_label_delete)
 
         val lastSpace = trimmedBefore.lastIndexOfAny(charArrayOf(' ', '\t', '\n'))
-        val newBefore = if (lastSpace >= 0) {
-            trimmedBefore.substring(0, lastSpace + 1)
-        } else {
-            ""
-        }
-        val newText = newBefore + afterCursor
-        val newCursor = newBefore.length
-        val success = setTextAndCursor(node, newText, newCursor, eventId)
+        val newBefore = if (lastSpace >= 0) trimmedBefore.substring(0, lastSpace + 1) else ""
+        val success = setTextAndCursor(node, newBefore + afterCursor, newBefore.length, eventId)
         if (success) {
             speak(context.getString(R.string.dictation_deleted_word))
         }
@@ -423,21 +443,26 @@ class DictationController(
     }
 
     private fun deleteLastCharacter(node: AccessibilityNodeInfoCompat, eventId: EventId?): Boolean {
-        val currentText = AccessibilityNodeInfoUtils.getText(node)?.toString() ?: return false
-        if (currentText.isEmpty()) return false
+        val currentText = currentText(node)
         val cursor = getCursorPosition(node, currentText)
-        if (cursor <= 0) return false
-        undoHistory.push(currentText)
+        if (currentText.isEmpty() || cursor <= 0) {
+            speak(context.getString(R.string.dictation_nothing_to_do))
+            return false
+        }
+        pushUndo(currentText, cursor, R.string.dictation_label_delete)
 
         val newText = currentText.substring(0, cursor - 1) + currentText.substring(cursor)
         val success = setTextAndCursor(node, newText, cursor - 1, eventId)
+        if (success) {
+            speak(context.getString(R.string.dictation_char_deleted))
+        }
         return success
     }
 
     private fun clearAllText(node: AccessibilityNodeInfoCompat, eventId: EventId?): Boolean {
-        val currentText = AccessibilityNodeInfoUtils.getText(node)?.toString() ?: ""
+        val currentText = currentText(node)
         if (currentText.isNotEmpty()) {
-            undoHistory.push(currentText)
+            pushUndo(currentText, getCursorPosition(node, currentText), R.string.dictation_label_clear)
         }
         val success = setTextAndCursor(node, "", 0, eventId)
         if (success) {
@@ -446,67 +471,53 @@ class DictationController(
         return success
     }
 
-    private fun handleReplaceCommand(raw: String, targetNode: AccessibilityNodeInfoCompat, eventId: EventId?): Boolean {
-        var target: String? = null
-        var replacement: String? = null
-        var replaceAll = false
-
-        REPLACE_ALL_REGEX.matchEntire(raw)?.let {
-            target = it.groupValues[1]
-            replacement = it.groupValues[2]
-            replaceAll = true
-        } ?: REPLACE_REGEX.matchEntire(raw)?.let {
-            target = it.groupValues[1]
-            replacement = it.groupValues[2]
-            replaceAll = false
-        } ?: CHANGE_ALL_REGEX.matchEntire(raw)?.let {
-            target = it.groupValues[1]
-            replacement = it.groupValues[2]
-            replaceAll = true
-        } ?: CHANGE_REGEX.matchEntire(raw)?.let {
-            target = it.groupValues[1]
-            replacement = it.groupValues[2]
-            replaceAll = false
-        } ?: SWAP_REGEX.matchEntire(raw)?.let {
-            target = it.groupValues[1]
-            replacement = it.groupValues[2]
-            replaceAll = false
-        }
-
-        if (target == null || replacement == null) return false
-
-        val currentText = AccessibilityNodeInfoUtils.getText(targetNode)?.toString() ?: ""
-        val result = DictationPunctuationFormatter.replacePhrase(currentText, target, replacement, replaceAll)
+    private fun replacePhrase(
+        targetNode: AccessibilityNodeInfoCompat,
+        currentText: String,
+        command: DictationCommand.Replace,
+        eventId: EventId?
+    ) {
+        val result = DictationPunctuationFormatter.replacePhrase(
+            currentText, command.target, command.replacement, command.all)
         if (result == null) {
-            speak(context.getString(R.string.dictation_not_found, target))
-            return true
+            speak(context.getString(R.string.dictation_not_found, command.target))
+            return
         }
 
-        undoHistory.push(currentText)
+        pushUndo(currentText, getCursorPosition(targetNode, currentText), R.string.dictation_label_edit)
         val success = setTextAndCursor(targetNode, result.newText, result.newCursor, eventId)
         if (success) {
             speak(context.getString(R.string.dictation_replaced, result.matchedTarget, result.finalReplacement))
         }
-        return true
     }
 
     private fun undo(node: AccessibilityNodeInfoCompat, eventId: EventId?): Boolean {
-        if (undoHistory.isEmpty()) return false
-        val previous = undoHistory.pop()
-        val success = setTextAndCursor(node, previous, previous.length, eventId)
+        val previous = undoStack.pop()
+        if (previous == null) {
+            speak(context.getString(R.string.dictation_nothing_to_undo))
+            return false
+        }
+        val success = setTextAndCursor(node, previous.text, previous.cursor, eventId)
         if (success) {
-            speak(context.getString(R.string.dictation_undo))
+            speak(context.getString(R.string.dictation_undid, previous.label))
         }
         return success
     }
 
     private fun readCurrentText(node: AccessibilityNodeInfoCompat) {
-        val currentText = AccessibilityNodeInfoUtils.getText(node)?.toString() ?: ""
+        val currentText = currentText(node)
         if (currentText.isBlank()) {
             speak(context.getString(R.string.dictation_empty_text))
         } else {
             speak(currentText)
         }
+    }
+
+    private fun setSelection(node: AccessibilityNodeInfoCompat, index: Int, eventId: EventId?) {
+        val selArgs = Bundle()
+        selArgs.putInt(AccessibilityNodeInfoCompat.ACTION_ARGUMENT_SELECTION_START_INT, index)
+        selArgs.putInt(AccessibilityNodeInfoCompat.ACTION_ARGUMENT_SELECTION_END_INT, index)
+        PerformActionUtils.performAction(node, AccessibilityNodeInfoCompat.ACTION_SET_SELECTION, selArgs, eventId)
     }
 
     private fun setTextAndCursor(
@@ -519,10 +530,7 @@ class DictationController(
         args.putCharSequence(AccessibilityNodeInfoCompat.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, newText)
         val result = PerformActionUtils.performAction(node, AccessibilityNodeInfoCompat.ACTION_SET_TEXT, args, eventId)
         if (result && cursorIndex >= 0) {
-            val selArgs = Bundle()
-            selArgs.putInt(AccessibilityNodeInfoCompat.ACTION_ARGUMENT_SELECTION_START_INT, cursorIndex)
-            selArgs.putInt(AccessibilityNodeInfoCompat.ACTION_ARGUMENT_SELECTION_END_INT, cursorIndex)
-            PerformActionUtils.performAction(node, AccessibilityNodeInfoCompat.ACTION_SET_SELECTION, selArgs, eventId)
+            setSelection(node, cursorIndex, eventId)
         }
         return result
     }
