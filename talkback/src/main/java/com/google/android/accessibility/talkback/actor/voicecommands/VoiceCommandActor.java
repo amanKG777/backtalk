@@ -66,10 +66,6 @@ public class VoiceCommandActor implements SpeechRecognizerRequester {
   public boolean onResult(String command, boolean isPartialResult) {
     LogUtils.v(
         TAG, "handleSpeechCommand with command: \"%s\", isPartial:%b", command, isPartialResult);
-    if (voiceCommandProcessor.getDictationController() != null
-        && voiceCommandProcessor.getDictationController().isDictationActive()) {
-      return voiceCommandProcessor.handleSpeechCommand(command, isPartialResult);
-    }
     return voiceCommandProcessor.handleSpeechCommand(command.toLowerCase(), isPartialResult);
   }
 
@@ -113,11 +109,6 @@ public class VoiceCommandActor implements SpeechRecognizerRequester {
   @Override
   public void onError(int error) {
     LogUtils.d(TAG, "errorCallback with error: %d", error);
-    if (voiceCommandProcessor.getDictationController() != null
-        && voiceCommandProcessor.getDictationController().isDictationActive()) {
-      voiceCommandProcessor.getDictationController().onRecognitionError(error);
-      return;
-    }
     switch (error) {
       case ERROR_INSUFFICIENT_PERMISSIONS ->
           speakDelayed(talkbackContext, R.string.voice_commands_no_mic_permissions);
@@ -175,6 +166,13 @@ public class VoiceCommandActor implements SpeechRecognizerRequester {
   }
 
   public void startListeningIfScreenNotLocked(boolean checkDialog, String nodeMenuShortcut) {
+    // Dictation owns the microphone while active; the voice command gesture ends it instead of
+    // starting a second recognizer on top of it.
+    if (voiceCommandProcessor.getDictationController() != null
+        && voiceCommandProcessor.getDictationController().isDictationActive()) {
+      voiceCommandProcessor.getDictationController().stopDictation(EVENT_ID_UNTRACKED, true);
+      return;
+    }
     if (ScreenMonitor.isDeviceLocked(talkbackContext)) {
       // Names where to assign a gesture when none opens the Backtalk menu.
       String menuGesture =

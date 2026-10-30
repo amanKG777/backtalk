@@ -2446,7 +2446,6 @@ public class TalkBackService extends AccessibilityServiceCompat
 
     dictationController = new DictationController(this, accessibilityFocusMonitor);
     dictationController.setPipeline(pipeline.getFeedbackReturner());
-    dictationController.setVoiceCommandActor(voiceCommandActor);
     selectorController.setDictationController(dictationController);
     voiceCommandProcessor.setDictationController(dictationController);
 

@@ -22,12 +22,12 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import com.google.android.accessibility.talkback.Feedback
-import com.google.android.accessibility.talkback.Feedback.VoiceRecognition
 import com.google.android.accessibility.talkback.Pipeline
 import com.google.android.accessibility.talkback.R
-import com.google.android.accessibility.talkback.actor.voicecommands.VoiceCommandActor
 import com.google.android.accessibility.talkback.actor.voicecommands.VoiceCommandFuzzyMatcher
 import com.google.android.accessibility.talkback.focusmanagement.AccessibilityFocusMonitor
+import com.google.android.accessibility.talkback.utils.SpeechRecognizerPerformer
+import com.google.android.accessibility.talkback.utils.SpeechRecognizerPerformer.SpeechRecognizerRequester
 import com.google.android.accessibility.utils.AccessibilityNodeInfoUtils
 import com.google.android.accessibility.utils.Performance.EVENT_ID_UNTRACKED
 import com.google.android.accessibility.utils.Performance.EventId
@@ -44,7 +44,8 @@ import com.google.android.accessibility.utils.output.SpeechController.SpeakOptio
  * - Spoken punctuation & symbol parsing via [DictationPunctuationFormatter]
  * - Spoken editing commands parsed by [DictationCommandParser] and applied with [DictationTextEditor]
  * - Multi-level undo ([DictationUndoStack]) and optional auto punctuation
- * - Voice command toggle ("dictate", "start dictation", "dictation mode", "stop dictation")
+ * - Its own speech recognizer session: dictation never goes through the voice command layer
+ *   ([VoiceCommandActor]/[VoiceCommandProcessor]) except for the "dictate" command that starts it
  * - Reading Controls (Selector) toggle integration
  */
 class DictationController(
@@ -56,6 +57,7 @@ class DictationController(
         private const val RESTART_DELAY_MS = 350L
         private const val MAX_SILENCE_TIMEOUTS = 5
         private const val AFTER_SPEECH_DELAY_MS = 300L
+        private const val MAX_RECOGNITION_MS = 20000
         private const val SPEECH_WATCHDOG_MS = 15000L
         private const val PREF_AUTO_PUNCTUATION = "pref_dictation_auto_punctuation"
 
@@ -64,7 +66,6 @@ class DictationController(
     }
 
     private var pipeline: Pipeline.FeedbackReturner? = null
-    private var voiceCommandActor: VoiceCommandActor? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     var isDictationActive: Boolean = false
@@ -77,12 +78,40 @@ class DictationController(
     private var speechInFlight = 0
     private var listenWhenQuiet = false
 
-    fun setPipeline(pipeline: Pipeline.FeedbackReturner?) {
-        this.pipeline = pipeline
+    /** Receives results and events from the dictation recognizer only. */
+    private val recognitionListener = object : SpeechRecognizerRequester {
+        override fun onResult(command: String, isPartialResult: Boolean): Boolean {
+            if (!isPartialResult) handleDictationSpeech(command, false)
+            return false
+        }
+
+        override fun onError(error: Int) = onRecognitionError(error)
+
+        override fun onFeedbackEvent(eventId: Int) {
+            when (eventId) {
+                SpeechRecognizerRequester.EVENT_PLATFORM_NOT_SUPPORT,
+                SpeechRecognizerRequester.EVENT_FEATURE_UNAVAILABLE,
+                SpeechRecognizerRequester.EVENT_OPERATION_FORBIDDEN_DURING_SUW -> {
+                    stopDictation(EVENT_ID_UNTRACKED, userInitiated = false)
+                    speak(context.getString(R.string.voice_commands_no_action))
+                }
+                SpeechRecognizerRequester.EVENT_MIC_PERMISSION_NOT_GRANTED -> {
+                    stopDictation(EVENT_ID_UNTRACKED, userInitiated = false)
+                    speak(context.getString(R.string.voice_commands_no_mic_permissions))
+                }
+                // Unlike voice commands, dictation never silences or restores TalkBack speech.
+                else -> Unit
+            }
+        }
     }
 
-    fun setVoiceCommandActor(actor: VoiceCommandActor?) {
-        this.voiceCommandActor = actor
+    private val recognizer =
+        SpeechRecognizerPerformer(context, MAX_RECOGNITION_MS, false).also {
+            it.setListener(recognitionListener)
+        }
+
+    fun setPipeline(pipeline: Pipeline.FeedbackReturner?) {
+        this.pipeline = pipeline
     }
 
     /**
@@ -140,7 +169,7 @@ class DictationController(
         undoStack.clear()
         mainHandler.removeCallbacksAndMessages(null)
 
-        voiceCommandActor?.stopListening()
+        recognizer.stopListening()
 
         if (userInitiated) {
             speak(context.getString(R.string.dictation_stopped))
@@ -562,10 +591,7 @@ class DictationController(
     private fun startListeningNow() {
         listenWhenQuiet = false
         if (isDictationActive) {
-            pipeline?.returnFeedback(
-                EVENT_ID_UNTRACKED,
-                Feedback.voiceRecognition(VoiceRecognition.Action.START_LISTENING, false)
-            )
+            recognizer.doListening()
         }
     }
 
