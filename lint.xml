@@ -6,6 +6,7 @@
       Keep MissingTranslation enabled globally and suppress it only for these exact resources.
     -->
     <issue id="MissingTranslation">
+        <ignore regexp="title_pref_open_app_info" />
         <ignore regexp="title_pref_shortcut_up_then_hold" />
         <ignore regexp="title_pref_shortcut_down_then_hold" />
         <ignore regexp="title_pref_shortcut_left_then_hold" />
