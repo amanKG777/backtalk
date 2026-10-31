@@ -6,6 +6,22 @@
       Keep MissingTranslation enabled globally and suppress it only for these exact resources.
     -->
     <issue id="MissingTranslation">
+        <ignore regexp="title_pref_shortcut_up_then_hold" />
+        <ignore regexp="title_pref_shortcut_down_then_hold" />
+        <ignore regexp="title_pref_shortcut_left_then_hold" />
+        <ignore regexp="title_pref_shortcut_right_then_hold" />
+        <ignore regexp="title_pref_shortcut_up_and_down_then_hold" />
+        <ignore regexp="title_pref_shortcut_down_and_up_then_hold" />
+        <ignore regexp="title_pref_shortcut_left_and_right_then_hold" />
+        <ignore regexp="title_pref_shortcut_right_and_left_then_hold" />
+        <ignore regexp="title_pref_shortcut_up_and_left_then_hold" />
+        <ignore regexp="title_pref_shortcut_up_and_right_then_hold" />
+        <ignore regexp="title_pref_shortcut_down_and_left_then_hold" />
+        <ignore regexp="title_pref_shortcut_down_and_right_then_hold" />
+        <ignore regexp="title_pref_shortcut_left_and_up_then_hold" />
+        <ignore regexp="title_pref_shortcut_left_and_down_then_hold" />
+        <ignore regexp="title_pref_shortcut_right_and_up_then_hold" />
+        <ignore regexp="title_pref_shortcut_right_and_down_then_hold" />
         <ignore regexp="settings_backup_title" />
         <ignore regexp="settings_backup_export" />
         <ignore regexp="settings_backup_export_summary" />
