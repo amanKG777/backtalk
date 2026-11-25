@@ -427,7 +427,12 @@ class ScriptRuntime(
         ScriptInput.isGesture(gesture) -> CommandBinding.Gesture(gesture)
         gesture.isNotEmpty() -> apiError("Unknown gesture $gesture")
         keys.isNotEmpty() -> CommandBinding.KeyCombo(asApiError { ScriptInput.parseKeys(keys) })
-        voice.isNotEmpty() -> CommandBinding.Voice(voice)
+        voice.isNotEmpty() -> {
+          apiCheck(ScriptVoiceMatcher.isValidPattern(voice)) {
+            "Voice command pattern needs text beyond *"
+          }
+          CommandBinding.Voice(voice)
+        }
         else -> apiError("A binding needs gesture, keys or voice")
       }
     return command to binding

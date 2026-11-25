@@ -189,8 +189,8 @@
     if (typeof fn !== 'function') throw new TypeError('onVoiceCommand needs a function');
     const patterns = Array.isArray(pattern) ? pattern : [pattern];
     for (const p of patterns) {
-      if (typeof p !== 'string' || !p.trim()) {
-        throw new TypeError('onVoiceCommand pattern must be a non-empty string or array of strings');
+      if (typeof p !== 'string' || !p.replace(/\*/g, '').trim()) {
+        throw new TypeError('onVoiceCommand pattern must be a non-empty string with text beyond *');
       }
     }
     const clean = patterns.map((p) => p.trim());

@@ -161,7 +161,8 @@ class LazyScriptHost(
     fallback: Runnable,
   ): Boolean = manager?.onKeys(modifiers, keyCode, withBacktalkModifier, fallback) == true
 
-  override fun onVoiceCommand(command: String): Boolean = manager?.onVoiceCommand(command) == true
+  override fun onVoiceCommand(command: String, fuzzyOnly: Boolean, fallback: Runnable): Boolean =
+    manager?.onVoiceCommand(command, fuzzyOnly, fallback) == true
 
   override fun menuItems(): List<ScriptMenuItem> = manager?.menuItems().orEmpty()
 

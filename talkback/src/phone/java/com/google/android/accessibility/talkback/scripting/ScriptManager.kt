@@ -164,63 +164,71 @@ class ScriptManager(
     feedback.paused = paused
   }
 
-  override fun onVoiceCommand(command: String): Boolean {
+  private sealed interface VoiceCommandTarget {
+    data class Manifest(val bound: BoundCommand) : VoiceCommandTarget
+
+    data class Dynamic(val runtime: ScriptRuntime, val pattern: String) : VoiceCommandTarget
+  }
+
+  override fun onVoiceCommand(command: String, fuzzyOnly: Boolean, fallback: Runnable): Boolean {
     if (activation.inBacktalk) return false
-    val norm = VoiceCommandFuzzyMatcher.normalize(command)
-    if (norm.isBlank()) return false
-
-    // 1. Check manifest voice bindings
-    for ((phrase, bound) in bindings.voice) {
-      if (norm.equals(phrase, ignoreCase = true) || VoiceCommandFuzzyMatcher.matchesPhrase(norm, phrase)) {
-        runCommand(bound, "voice", command = command)
-        return true
+    val targets = buildList<VoiceTarget<VoiceCommandTarget>> {
+      for ((phrase, bound) in bindings.voice) {
+        add(VoiceTarget(phrase, VoiceCommandTarget.Manifest(bound)))
       }
-    }
-
-    // 2. Check dynamic voice commands in loaded runtimes
-    for (runtime in loaded.values) {
-      if (!runtime.isLoaded || !runtime.allowed(ScriptPermission.INPUT, "Voice")) continue
-      for (pattern in runtime.voicePatterns) {
-        val normPattern = pattern.trim().lowercase()
-        var matched = false
-        var remainder: String? = null
-
-        if (normPattern.contains('*')) {
-          val prefix = normPattern.substringBefore('*').trim()
-          val suffix = normPattern.substringAfter('*').trim()
-          if (norm.startsWith(prefix) && (suffix.isEmpty() || norm.endsWith(suffix))) {
-            matched = true
-            remainder = norm.removePrefix(prefix).removeSuffix(suffix).trim()
-          }
-        } else if (norm == normPattern || VoiceCommandFuzzyMatcher.matchesPhrase(norm, normPattern)) {
-          matched = true
-        }
-
-        if (matched) {
-          onScriptThread {
-            if (runtime.isLoaded) {
-              val copy = focusedNode()?.let { AccessibilityNodeInfoCompat.obtain(it) }
-              val data = jsonObject(
-                "command" to command,
-                "pattern" to pattern,
-                "remainder" to remainder,
-                "node" to runtime.snapshotIfAllowed(copy),
-              )
-              val result = runtime.dispatch("voiceCommand", data)
-              result?.let {
-                val toSpeak = runCatching { JSONObject(it).optString("speak") }.getOrNull()
-                if (!toSpeak.isNullOrEmpty()) {
-                  feedback.speak(toSpeak, interrupt = false)
-                }
-              }
-            }
-          }
-          return true
+      for (runtime in loaded.values) {
+        if (!runtime.isLoaded || !runtime.allowed(ScriptPermission.INPUT, "Voice")) continue
+        for (pattern in runtime.voicePatterns) {
+          add(VoiceTarget(pattern, VoiceCommandTarget.Dynamic(runtime, pattern)))
         }
       }
     }
+    val match =
+      if (fuzzyOnly) {
+        ScriptVoiceMatcher.matchFuzzy(command, targets)
+      } else {
+        ScriptVoiceMatcher.matchExactOrWildcard(command, targets)
+      } ?: return false
 
-    return false
+    when (val target = match.value) {
+      is VoiceCommandTarget.Manifest -> {
+        runCommand(
+          target.bound,
+          "voice",
+          command = command,
+          remainder = match.remainder,
+          fallback = fallback,
+        )
+      }
+      is VoiceCommandTarget.Dynamic -> {
+        onScriptThread {
+          val runtime = target.runtime
+          if (!runtime.isLoaded) {
+            mainHandler.post(fallback)
+            return@onScriptThread
+          }
+          val copy = focusedNode()?.let { AccessibilityNodeInfoCompat.obtain(it) }
+          val data = jsonObject(
+            "command" to command,
+            "pattern" to target.pattern,
+            "remainder" to match.remainder,
+            "node" to runtime.snapshotIfAllowed(copy),
+          )
+          val result = runtime.dispatch("voiceCommand", data)
+          if (handsBack(result)) {
+            mainHandler.post(fallback)
+            return@onScriptThread
+          }
+          val toSpeak = result?.let {
+            runCatching { JSONObject(it).optString("speak") }.getOrNull()
+          }
+          if (!toSpeak.isNullOrEmpty() && runtime.allowed(ScriptPermission.SPEECH, "Voice speech")) {
+            feedback.speak(toSpeak, interrupt = false)
+          }
+        }
+      }
+    }
+    return true
   }
 
   override fun onGesture(name: String, fallback: Runnable): Boolean =

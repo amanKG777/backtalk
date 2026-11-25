@@ -56,7 +56,7 @@ interface ScriptHost {
     fallback: Runnable,
   ): Boolean
 
-  fun onVoiceCommand(command: String): Boolean
+  fun onVoiceCommand(command: String, fuzzyOnly: Boolean, fallback: Runnable): Boolean
 
   fun menuItems(): List<ScriptMenuItem>
 
@@ -249,7 +249,8 @@ object Scripts {
   fun readingControls(): List<ScriptReadingControl> = host?.readingControls().orEmpty()
 
   @JvmStatic
-  fun onVoiceCommand(command: String): Boolean = host?.onVoiceCommand(command) == true
+  fun onVoiceCommand(command: String, fuzzyOnly: Boolean, fallback: Runnable): Boolean =
+    host?.onVoiceCommand(command, fuzzyOnly, fallback) == true
 
   @JvmStatic
   fun itemActions(node: AccessibilityNodeInfoCompat): List<ScriptItemAction> =

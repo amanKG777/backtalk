@@ -366,12 +366,21 @@ public class VoiceCommandProcessor {
       return true;
     }
 
-    // Check custom script voice commands
-    if (!isPartialResult && Scripts.onVoiceCommand(command)) {
+    // Exact or wildcard script voice commands come before Backtalk's built-in commands.
+    if (!isPartialResult
+        && Scripts.onVoiceCommand(
+            command,
+            /* fuzzyOnly= */ false,
+            () -> handleAfterExactScriptCommand(command, isPartialResult))) {
       analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
       return true;
     }
 
+    return handleAfterExactScriptCommand(command, isPartialResult);
+  }
+
+  @CanIgnoreReturnValue
+  private boolean handleAfterExactScriptCommand(String command, boolean isPartialResult) {
     if (systemVoiceCommands.handleCommand(command, isPartialResult)) {
       analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
       return true;
@@ -382,6 +391,22 @@ public class VoiceCommandProcessor {
       return true;
     }
 
+    // Fuzzy script voice commands run only after Backtalk's built-in commands find nothing.
+    if (!isPartialResult
+        && Scripts.onVoiceCommand(
+            command,
+            /* fuzzyOnly= */ true,
+            () -> handleAppOrUnrecognizedCommand(command, lowerCaseCommand, isPartialResult))) {
+      analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
+      return true;
+    }
+
+    return handleAppOrUnrecognizedCommand(command, lowerCaseCommand, isPartialResult);
+  }
+
+  @CanIgnoreReturnValue
+  private boolean handleAppOrUnrecognizedCommand(
+      String command, String lowerCaseCommand, boolean isPartialResult) {
     if (openAppsEnabled
         && !isPartialResult
         && appLauncher.handle(

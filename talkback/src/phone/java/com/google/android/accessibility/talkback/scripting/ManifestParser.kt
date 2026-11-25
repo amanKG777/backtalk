@@ -285,6 +285,11 @@ class ManifestParser(private val strict: Boolean) {
         .firstOrNull { !ScriptInput.isGesture(it) }
         ?.let { manifestError("Unknown gesture $it. docs/scripting.md lists the gestures.") }
       val voice = command.stringList("voice").distinct()
+      voice.forEach {
+        manifestCheck(ScriptVoiceMatcher.isValidPattern(it)) {
+          "Voice command pattern '$it' in command $id needs text beyond *"
+        }
+      }
       ScriptCommand(
           id = id,
           title = command.requiredString("title"),
@@ -299,7 +304,7 @@ class ManifestParser(private val strict: Boolean) {
         )
         .also {
           manifestCheck(it.bindings.isNotEmpty()) {
-            "The command $id needs gesture, keys, menu or control, or voice"
+            "The command $id needs gesture, keys, menu, control or voice"
           }
         }
     }

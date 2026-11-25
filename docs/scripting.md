@@ -260,7 +260,7 @@ commands: [
 *   `control: true` adds it to the reading controls. Swiping up or down with the control selected runs the command with `direction` set to `'previous'` or `'next'`.
 *   `voice` is a voice phrase or a list of phrases that trigger the command when spoken.
 
-Commands need the `input` permission. The user can turn each gesture, key, and voice trigger off on the script's page, or assign others. While a script runs, its gestures, keys and voice commands come before Backtalk's built-in actions, except for the gesture assigned to **Turn all scripts on or off**.
+Commands need the `input` permission. The user can turn each gesture, key, and voice trigger off on the script's page, or assign others. While a script runs, its gestures, keys, and exact or wildcard voice commands come before Backtalk's built-in actions (except call commands and the gesture assigned to **Turn all scripts on or off**); fuzzy voice matches run if Backtalk's built-in commands find nothing.
 
 ```js
 backtalk.onCommand('unread', (event) => {
@@ -268,7 +268,7 @@ backtalk.onCommand('unread', (event) => {
 });
 ```
 
-`event.node` is the focused item. Return `false` to have Backtalk do what the action normally does.
+`event.node` is the focused item. When `via === 'voice'`, `event.command` is the spoken command and `event.remainder` is the `*` capture when a wildcard pattern matched. Return `false` to have Backtalk do what the action normally does.
 
 `backtalk.bind(command, { gesture })`, `backtalk.bind(command, { keys })` or `backtalk.bind(command, { voice: 'phrase' })` adds a trigger to a declared command, and `backtalk.unbind` removes one.
 
@@ -288,7 +288,7 @@ backtalk.onVoiceCommand('search for *', (event) => {
 });
 ```
 
-`onVoiceCommand` returns a function that unregisters the command. Return text or `{ speak: text }` to speak feedback.
+`onVoiceCommand` returns a function that unregisters the command. Return text or `{ speak: text }` to speak feedback (requires the `speech` permission), or return `false` to fall back to Backtalk's normal handling.
 
 ### Navigation
 

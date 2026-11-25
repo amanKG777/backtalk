@@ -51,7 +51,14 @@ private constructor(
             when (binding) {
               is CommandBinding.Gesture -> gestures.putIfAbsent(binding.name, bound)
               is CommandBinding.KeyCombo -> keys.putIfAbsent(binding.keys, bound)
-              is CommandBinding.Voice -> voice.putIfAbsent(binding.phrase.trim().lowercase(), bound)
+              is CommandBinding.Voice -> {
+                if (ScriptVoiceMatcher.isValidPattern(binding.phrase)) {
+                  val key =
+                    if ('*' in binding.phrase) binding.phrase.trim().lowercase()
+                    else com.google.android.accessibility.talkback.actor.voicecommands.VoiceCommandFuzzyMatcher.normalize(binding.phrase)
+                  if (key.isNotEmpty()) voice.putIfAbsent(key, bound)
+                }
+              }
               CommandBinding.MenuItem -> menu += bound
               CommandBinding.ReadingControl -> controls += bound
             }

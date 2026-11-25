@@ -322,7 +322,7 @@ class ManifestParserTest {
   @Test
   fun aCommandNeedsAWayToRunIt() {
     assertTrue(
-      "needs gesture, keys, menu or control" in
+      "needs gesture, keys, menu, control or voice" in
         rejects(""","permissions":["input"],"commands":[{"id":"go","title":"Go"}]""")
     )
   }
@@ -333,6 +333,14 @@ class ManifestParserTest {
       parse(""","permissions":["input"],"commands":[{"id":"go","title":"Go","voice":["start go","go"]}]""")
     assertEquals(listOf("start go", "go"), manifest.commands[0].voice)
     assertTrue(manifest.commands[0].bindings.any { it is CommandBinding.Voice && it.phrase == "start go" })
+  }
+
+  @Test
+  fun aCommandRejectsBareWildcardVoice() {
+    assertTrue(
+      "needs text beyond *" in
+        rejects(""","permissions":["input"],"commands":[{"id":"go","title":"Go","voice":"*"}]""")
+    )
   }
 
   @Test
