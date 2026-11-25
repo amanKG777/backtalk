@@ -102,6 +102,7 @@ import com.google.android.accessibility.talkback.R;
 import com.google.android.accessibility.talkback.TalkBackService;
 import com.google.android.accessibility.talkback.actor.DimScreenActor;
 import com.google.android.accessibility.talkback.actor.gemini.GeminiConfiguration;
+import com.google.android.accessibility.talkback.scripting.Scripts;
 import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics;
 import com.google.android.accessibility.talkback.analytics.TalkBackAnalytics.VoiceCommandTypeId;
 import com.google.android.accessibility.talkback.contextmenu.ContextMenuItem;
@@ -362,6 +363,12 @@ public class VoiceCommandProcessor {
       if (!isPartialResult) {
         analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
       }
+      return true;
+    }
+
+    // Check custom script voice commands
+    if (!isPartialResult && Scripts.onVoiceCommand(command)) {
+      analytics.onVoiceCommandEvent(VOICE_COMMAND_RECOGNIZED);
       return true;
     }
 

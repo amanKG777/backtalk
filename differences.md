@@ -497,6 +497,12 @@ Turn on **Controls** > **Open apps by voice** in Backtalk settings to use this c
 
 With the switch on, phrases starting with **Open** wait for the final speech result. Backtalk checks built-in commands such as **Open Backtalk settings** first. If none matches, it looks for an app by name. Turning the switch off cancels pending launches. App names are looked up for each request, so newly installed or removed apps are reflected without restarting Backtalk.
 
+### Voice command scripts API
+
+Backtalk scripts can create custom voice commands:
+*   **Manifest commands**: Add `voice: 'phrase'` or `voice: ['phrase 1', 'phrase 2']` to any entry in `manifest.commands`. When spoken, Backtalk runs the command with `via: 'voice'`, `event.command`, and `event.remainder`.
+*   **Dynamic voice API**: Use `backtalk.onVoiceCommand(pattern, callback)` to register exact phrases, fuzzy phrases, or wildcard capture patterns (such as `'search for *'`).
+
 ## Screen and brightness
 
 ### Brightness reading control
